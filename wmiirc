@@ -1,0 +1,285 @@
+#!/usr/bin/env lua
+--
+-- Copyright (c) 2009, Donald Ephraim Curtis <dcurtis@cs.uiowa.edu>
+-- Copyright (c) 2007, Bart Trojanowski <bart@jukie.net>
+--
+-- Some stuff below will eventually go to a separate file, and configuration 
+-- will remain here similar to the split between the wmii+ruby wmiirc and
+-- wmiirc-config.  For now I just want to get the feel of how things will 
+-- work in lua.
+--
+-- http://www.jukie.net/~bart/blog/tag/wmiirc-lua
+-- git://www.jukie.net/wmiirc-lua.git/
+--
+
+io.stderr:write ("----------------------------------------------\n")
+
+-- load wmii.lua
+local wmiidir = os.getenv("HOME") .. "/.wmii-lua"
+package.path  = wmiidir .. "/core/?.lua;"       ..
+                wmiidir .. "/plugins/?.lua;"    ..
+                package.path
+require "wmii" 
+require "os"
+
+-- Setup my environment (completely optional)
+
+local hostnameio = io.popen("hostname")
+local hostname = hostnameio:read()
+hostnameio:close()
+io.stderr:write("Found HOSTNAME: "..hostname.."\n")
+local homedir  = os.getenv("HOME") or "~"
+io.stderr:write("Found HOME: "..homedir.."\n")
+
+--[[
+        -- conditionally load up my xmodmaprc
+        if type(hostname) == 'string' and hostname:match("^oxygen") then
+                os.execute ("xmodmap ~/.xmodmaprc")
+        end
+
+        -- add ssh keys if they are not in the agent already
+        os.execute ("if ( ! ssh-add -l >/dev/null ) || test $(ssh-add -l | wc -l) = 0 ; then "
+                        .. "ssh-add </dev/null ; fi")
+
+        -- this lets me have progyfonts in ~/.fonts
+        os.execute ("~/.fonts/rebuild")
+
+        -- restore the mixer settings
+        os.execute ("aumix -L")
+
+        -- this hids the mouse cursor after a timeout
+        os.execute ("unclutter &")
+
+        -- configure X
+        os.execute ("xset r on")
+        os.execute ("xset r rate 200 25")
+        os.execute ("xset b off")
+        os.execute ("xrandr --dpi 96")
+
+        -- clear the background
+        os.execute ("xsetroot -solid black")
+
+        -- this will prime the alt-p menu's cache
+        os.execute ("dmenu_path>/dev/null&")
+--]]
+
+-- local configuration variables used 
+-- to generate the global config
+local term = 'urxvtc'
+
+--local fg_normal = '#e4eaf2'
+--local bg_normal = '#07101f'
+--local border_normal = '#07101f'
+
+--local fg_focus = '#3e383c'
+--local fg_focus = '#f09f29'
+--local fg_focus = '#6a98c9'
+
+--local fg_focus = '#f09f29'
+--local bg_focus = '#0d1f38'
+--local border_focus = '#07101f'
+
+local fg_normal = '#cccccc'
+local bg_normal = '#000000'
+local border_normal = '#7a7a7a'
+
+local fg_focus = '#98aeff'
+local bg_focus = '#1c1c1c'
+local border_focus = '#cd8b00'
+--local border_focus = bg_focus
+
+if hostname then
+    if hostname:find("uiowa") then
+        term = "gnome-terminal"
+    end
+end
+
+-- This is the base configuration of wmii, it writes to the /ctl file.
+wmii.set_ctl ({
+        border      = 0,
+        font        = '-*-terminus-*-*-*-*-*-*-*-*-*-*-*-*',
+        --normcolors  = '#FFFFFF #222222 #333333',
+        --focuscolors = '#FFFFaa #007700 #88ff88',
+        normcolors  = table.concat({fg_normal, bg_normal, border_normal}, ' '),
+        focuscolors = table.concat({border_focus, bg_focus, border_focus}, ' '),
+        --normcolors  ='#9ec452 #000000 #000000',
+        --focuscolors ='#f09f29 #3e383c #3e383c',
+        --focuscolors ='#f09f29 #150f0f #3e383c',
+        grabmod     = 'Mod1',
+        bar         = 'on top',
+        incmode     = 'ignore',
+})
+
+-- This overrides some variables that are used by event and key handlers.
+--   TODO: need to have a list of the standard ones somewhere.
+--         For now look in the wmii.lua for the key_handlers table, it
+--         will reference the variables as getconf("varname").
+-- If you add your own actions, or key handlers you are encouraged to 
+-- use configuration values as appropriate with wmii.setconf("var", "val"), or
+-- as a table like the example below.
+wmii.set_conf ({
+        xterm = term,
+        -- xlock = '/usr/bin/xtrlock',
+        debug = true,
+        fg_normal = fg_normal,
+        fg_focus = fg_focus,
+        bg_normal = bg_normal,
+        bg_focus = bg_focus,
+        ["100_client_mode.colors"] = table.concat({fg_normal, bg_normal, bg_normal}, ' '),
+        ["zzz105_client_mode.colors"] = table.concat({fg_normal, bg_normal, bg_normal}, ' '),
+})
+
+
+-- colrules file contains a list of rules which affect the width of newly 
+-- created columns.  Rules have a form of
+--      /regexp/ -> width[+width[+width...]]
+-- When a new column, n, is created on a view whose name matches regex, the
+-- n'th given width percentage of the screen is given to it.  If there is 
+-- no nth width, 1/ncolth of the screen is given to it.
+--
+wmii.write ("/colrules", "/.*/ -> 70+30\n"
+                      .. "/gaim/ -> 80+20\n")
+
+-- tagrules file contains a list of riles which affect which tags are 
+-- applied to a new client.  Rules has a form of
+--      /regexp/ -> tag[+tag[+tag...]]
+-- When client's name:class:title matches regex, it is given the 
+-- tagstring tag(s).  There are two special tags:
+--      sel (or the deprecated form: !) represents the current tag, and
+--      ~ which represents the floating layer
+wmii.write ("/tagrules", "/XMMS.*/ -> ~\n"
+                      .. "/Firefox.*/ -> www\n"
+                      .. "/Iceweasel.*/ -> www\n"
+                      .. "/Gran Paradiso/ -> www\n"
+                      .. "/a[Kk]regator/ -> www\n"
+                      .. "/Gimp.*/ -> gimp\n"
+                      .. "/Gimp.*/ -> ~\n"
+                      .. "/Gaim.*/ -> gaim\n"
+                      .. "/gitk/ -> ~\n"
+                      .. "/MPlayer.*/ -> ~\n"
+                      .. "/x?vnc[^ ]*viewer.*/ -> ~\n"
+                      .. "/VNC.*:VNC.*/ -> ~\n"
+                      .. "/.*/ -> sel\n" 
+                      )
+
+-- load some plugins
+wmii.load_plugin ("messages")
+wmii.load_plugin ("clock")
+
+wmii.load_plugin ("loadavg")
+wmii.set_conf("loadavg.bg", bg_normal)
+
+wmii.load_plugin ("volume")
+wmii.load_plugin ("browser")
+--wmii.load_plugin ("message")
+--wmii.load_plugin ("view_workdir")
+wmii.load_plugin ("cpu")
+wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+
+wmii.load_plugin ("ssh")
+
+-- configure any plugins here
+wmii.set_conf({ 
+    ["clock.fg_date"] = fg_normal,
+    ["clock.bg_date"] = bg_normal,
+    ["clock.fg_time"] = fg_focus,
+    ["clock.bg_time"] = bg_normal,
+    ["clock.fg_month"] = fg_focus,
+    ["clock.fg_today"] = bg_normal,
+    ["clock.bg_today"] = fg_normal,
+    ["clock.fg_normal"] = fg_normal,
+    ["clock.bg_normal"] = bg_normal,
+
+})
+
+if hostname then
+    if hostname:find("murdock") then
+        wmii.load_plugin ("battery")
+        wmii.set_conf("battery.names", "BAT0")
+        wmii.set_conf("volume.mixer", "LineOut")
+    end
+    if not hostname:find("uiowa") then
+        local mpd = wmii.load_plugin ("mpd")
+        mpd.register_action()
+        wmii.set_conf("301_mpd_status.colors", table.concat({"#9ec452", bg_normal, bg_normal}, ' '))
+    end
+end
+
+-- dividers for my widgets
+local divider_colors = table.concat({"#3d3d3d", bg_normal, bg_normal}, ' ')
+local i,v
+for i,v in pairs({350, 450, 850}) do
+    local w = wmii.widget:new(tostring(v))
+    w:show("|",divider_colors)
+end
+local w = wmii.widget:new("zzz000", nil, "/lbar/")
+w:show("|",divider_colors)
+
+-- my own personal ssh menu ( i keep hosts hashed )
+function show_ssh_menu()
+    local str = wmii.menu({'linux','vinci','milkbox.net'}, "ssh:")
+    if type(str) == "string" then
+        local cmd = wmii.get_conf("xterm") .. " -e /bin/sh -c \"exec ssh "
+        cmd = cmd .. str .. "\" &"
+        wmii.log("Executing: "..cmd)
+        os.execute(cmd)
+    end
+end
+wmii.add_key_handler ("Mod1-z", show_ssh_menu)
+
+-- set my initial view to main
+wmii.write ("/ctl", "view main")
+
+
+-- other handlers
+wmii.add_key_handler("Control-Mod1-Delete", function(key) wmii.log("executing screensaver"); os.execute("gnome-screensaver-command -l") end)
+
+-- here are some other examples...
+--[[
+
+-- use Mod1-tab to flip to the previous view
+wmii.remap_key_handler ("Mod1-r", "Mod1-tab")
+--]]
+
+wmii.add_key_handler ("Mod4-1", function(key, num)
+    wmii.set_view("main")
+end
+)
+wmii.add_key_handler ("Mod4-2", function(key, num)
+    wmii.set_view("www")
+end
+)
+
+-- this is to change how tags are displayed
+function tag_display(tag, focused)
+        local colors = ""
+        if focused then
+                colors = table.concat({fg_focus, bg_focus, bg_focus}, ' ')
+                colors = colors.." "
+        else
+                colors = table.concat({fg_normal, bg_normal, bg_normal}, ' ')
+                colors = colors.." "
+        end
+
+        wmii.log(colors..tag)
+        return colors..tag
+end
+wmii.tag_display = tag_display
+
+
+-- i like my curren window to be displayed in the taskbar
+local client_name = wmii.widget:new("zzz100_client", nil, "/lbar/")
+
+local wmii_client_focused = wmii.client_focused
+local function client_focused(xid)
+    local name = wmii.read("/client/"..xid.."/label")
+    client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
+    return wmii_client_focused(xid)
+end
+wmii.client_focused = client_focused
+
+
+-- ------------------------------------------------------------------------
+-- start it up!
+wmii.run_event_loop()
+
