@@ -206,7 +206,7 @@ function update_volume ( new_vol )
 	local volume = mixer_set_volume( value )
     local value = volume:gsub("%%","")
     value = tonumber(value)
-    local fg
+    local fg = wmii.get_conf("volume.fg_low")
     local bg = wmii.get_conf("bg_normal")
     if not bg then
         local junk
@@ -214,12 +214,12 @@ function update_volume ( new_vol )
         junk, bg = normcolors:match("(#%x+)%s+(#%x+)%s#%x+")
     end
 
-    if value > wmii.get_conf("volume.high") then
-        fg = wmii.get_conf("volume.fg_high")
-    elseif value > wmii.get_conf("volume.med") then
-        fg = wmii.get_conf("volume.fg_med")
-    else
-        fg = wmii.get_conf("volume.fg_low")
+    if value then
+        if value > wmii.get_conf("volume.high") then
+            fg = wmii.get_conf("volume.fg_high")
+        elseif value > wmii.get_conf("volume.med") then
+            fg = wmii.get_conf("volume.fg_med")
+        end
     end
 	widget:show("[" .. volume .. "]", table.concat({fg, bg, bg}, ' '))
 end
