@@ -174,8 +174,6 @@ wmii.load_plugin ("browser")
 --wmii.load_plugin ("message")
 --wmii.load_plugin ("view_workdir")
 wmii.load_plugin ("cpu")
-wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-
 wmii.load_plugin ("ssh")
 
 -- configure any plugins here
@@ -194,6 +192,7 @@ wmii.set_conf({
 
 if hostname then
     if hostname:find("murdock") then
+        wmii.set_conf("400_cpufreq.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
         wmii.load_plugin ("battery")
         wmii.set_conf("battery.names", "BAT0")
         wmii.set_conf("volume.mixer", "LineOut")
