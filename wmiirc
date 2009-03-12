@@ -295,7 +295,6 @@ function tag_display(tag, focused)
                 colors = colors.." "
         end
 
-        wmii.log(colors..tag)
         return colors..tag
 end
 wmii.tag_display = tag_display
