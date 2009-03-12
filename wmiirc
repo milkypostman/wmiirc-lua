@@ -132,8 +132,6 @@ wmii.set_conf ({
         fg_focus = fg_focus,
         bg_normal = bg_normal,
         bg_focus = bg_focus,
-        ["100_client_mode.colors"] = table.concat({fg_normal, bg_normal, bg_normal}, ' '),
-        ["zzz105_client_mode.colors"] = table.concat({fg_normal, bg_normal, bg_normal}, ' '),
 })
 
 
@@ -171,24 +169,16 @@ wmii.write ("/tagrules", "/XMMS.*/ -> ~\n"
 
 -- load some plugins
 wmii.load_plugin ("messages")
-wmii.set_conf("messages.border_color", bg_normal)
 
 wmii.load_plugin ("clock")
 
 wmii.load_plugin ("volume")
-wmii.set_conf("volume.border_color", bg_normal)
 
 wmii.load_plugin ("browser")
 --wmii.load_plugin ("message")
 --wmii.load_plugin ("view_workdir")
 
 wmii.load_plugin ("ssh")
-
--- configure any plugins here
-wmii.set_conf({ 
-    ["clock.border_date"] = bg_normal,
-    ["clock.border_time"] = bg_normal,
-})
 
 -- dividers for my widgets
 local divider_colors = table.concat({"#3d3d3d", bg_normal, bg_normal}, ' ')
@@ -202,9 +192,9 @@ if hostname then
 
     if hostname:find("murdock") then
         wmii.load_plugin ("cpufreq")
-        wmii.set_conf("400_cpufreq.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-        wmii.set_conf("cpufreq.color_ondemand", table.concat({"#009900", bg_normal, bg_normal}, ' '))
-        wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, bg_normal}, ' '))
+        --wmii.set_conf("400_cpufreq.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+        wmii.set_conf("cpufreq.color_ondemand", table.concat({"#009900", bg_normal, border_normal}, ' '))
+        wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, border_normal}, ' '))
 
         wmii.load_plugin ("battery")
         wmii.set_conf("battery.names", "BAT0")
@@ -231,6 +221,17 @@ if hostname then
     end
 
     if hostname:find("baracus") or hostname:find("uiowa") then
+        wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+        wmii.set_conf("zzz105_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+
+        wmii.set_conf({ 
+            ["clock.border_date"] = bg_normal,
+            ["clock.border_time"] = bg_normal,
+        })
+
+        wmii.set_conf("messages.border_color", bg_normal)
+        wmii.set_conf("volume.border_color", bg_normal)
+
         wmii.load_plugin ("loadavg")
         wmii.set_conf("loadavg.bg", bg_normal)
 
@@ -244,6 +245,22 @@ if hostname then
             return wmii_client_focused(xid)
         end
         wmii.client_focused = client_focused
+
+        -- this is to change how tags are displayed
+        function tag_display(tag, focused)
+            local colors = ""
+            if focused then
+                colors = table.concat({fg_focus, bg_focus, bg_focus}, ' ')
+                colors = colors.." "
+            else
+                colors = table.concat({fg_normal, bg_normal, bg_normal}, ' ')
+                colors = colors.." "
+            end
+
+            return colors..tag
+        end
+        wmii.tag_display = tag_display
+
     end
 
 end
@@ -283,21 +300,6 @@ wmii.add_key_handler ("Mod4-2", function(key, num)
     wmii.set_view("www")
 end
 )
-
--- this is to change how tags are displayed
-function tag_display(tag, focused)
-        local colors = ""
-        if focused then
-                colors = table.concat({fg_focus, bg_focus, bg_focus}, ' ')
-                colors = colors.." "
-        else
-                colors = table.concat({fg_normal, bg_normal, bg_normal}, ' ')
-                colors = colors.." "
-        end
-
-        return colors..tag
-end
-wmii.tag_display = tag_display
 
 
 
