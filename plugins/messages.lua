@@ -18,6 +18,9 @@ local wmii = require("wmii")
 local os = require("os")
 local math = require("math")
 local string = require("string")
+local table = require("table")
+local tonumber = tonumber
+local print = print
 local tostring = tostring
 
 module ("messages")
@@ -29,6 +32,21 @@ local colors = {}
 local color_start = {{0xFF,0xFF,0xFF}, {0xAA,0x22,0xAA}, {0xFF,0x00,0x00}}
 local color_end   = {{0x44,0x44,0x44}, {0x00,0x00,0x00}, {0x00,0x00,0x00}}
 local color_steps = 10
+
+-- find the background the taskbar normally is
+local normcolors = wmii.get_ctl("normcolors")
+if normcolors then
+    local nf, nb = normcolors:match("#(%x+)%s+#(%x+)%s#%x+")
+
+    local i
+    local bg = {}
+    for n in nb:gmatch("%x%x") do
+        table.insert(bg, tonumber("0x"..n))
+    end
+
+    color_end[2] = bg
+    color_end[3] = bg
+end
 
 -- build up the colours palett
 local i,t,r

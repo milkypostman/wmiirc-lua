@@ -103,7 +103,10 @@ local function create_string(cpu)
                frq = ""
        end
 
-      return frq .. "(" .. gov .. ")" 
+       local color = wmii.get_conf("cpufreq.color_"..gov)
+
+      return frq, color
+      --return frq .. "(" .. gov .. ")" 
 end
 
 
@@ -112,8 +115,12 @@ function update ( new_vol )
        local _, cpu
        local list = cpu_list()
 	   local space = ""
+       local color
        for _,cpu in pairs(list) do
-		   local str = create_string(cpu)
+		   local str,cc = create_string(cpu)
+           if not color then
+               color = cc
+           end
 		   if txt == str then
 			   txt = "2x " .. txt
 		   else
@@ -122,7 +129,7 @@ function update ( new_vol )
 		   space = " "
        end
 
-	widget:show(txt)
+	widget:show(txt, color)
 end
 
 local function cpu_timer ( timer )

@@ -1903,7 +1903,6 @@ function update_displayed_widgets ()
         local i,v
         for i,v in pairs(widgets) do
                 old[v.name] = nil
-                print(v.name)
         end
 
         -- anything left in the old table should be removed now

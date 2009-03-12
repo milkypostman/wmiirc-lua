@@ -79,13 +79,25 @@ local term = 'urxvtc'
 --local bg_focus = '#0d1f38'
 --local border_focus = '#07101f'
 
-local fg_normal = '#cccccc'
-local bg_normal = '#000000'
-local border_normal = '#7a7a7a'
+--local fg_normal = '#cccccc'
+--local bg_normal = '#000000'
+--local border_normal = '#7a7a7a'
 
-local fg_focus = '#98aeff'
-local bg_focus = '#1c1c1c'
-local border_focus = '#cd8b00'
+--local fg_focus = '#98aeff'
+--local bg_focus = '#1c1c1c'
+--local border_focus = '#cd8b00'
+--
+--local fg_focus = '#ffffaa'
+--local bg_focus = '#007700'
+--local border_focus = '#88ff88'
+--
+local fg_normal = '#cccccc'
+local bg_normal = '#222222'
+local border_normal = '#333333'
+
+local fg_focus = '#cd8b00'
+local bg_focus = '#007700'
+local border_focus = '#88ff88'
 --local border_focus = bg_focus
 
 if hostname then
@@ -98,13 +110,8 @@ end
 wmii.set_ctl ({
         border      = 0,
         font        = '-*-terminus-*-*-*-*-*-*-*-*-*-*-*-*',
-        --normcolors  = '#FFFFFF #222222 #333333',
-        --focuscolors = '#FFFFaa #007700 #88ff88',
         normcolors  = table.concat({fg_normal, bg_normal, border_normal}, ' '),
-        focuscolors = table.concat({border_focus, bg_focus, border_focus}, ' '),
-        --normcolors  ='#9ec452 #000000 #000000',
-        --focuscolors ='#f09f29 #3e383c #3e383c',
-        --focuscolors ='#f09f29 #150f0f #3e383c',
+        focuscolors = table.concat({fg_focus, bg_focus, border_focus}, ' '),
         grabmod     = 'Mod1',
         bar         = 'on top',
         incmode     = 'ignore',
@@ -166,53 +173,79 @@ wmii.write ("/tagrules", "/XMMS.*/ -> ~\n"
 wmii.load_plugin ("messages")
 wmii.load_plugin ("clock")
 
-wmii.load_plugin ("loadavg")
-wmii.set_conf("loadavg.bg", bg_normal)
-
 wmii.load_plugin ("volume")
 wmii.load_plugin ("browser")
 --wmii.load_plugin ("message")
 --wmii.load_plugin ("view_workdir")
-wmii.load_plugin ("cpu")
+
 wmii.load_plugin ("ssh")
 
 -- configure any plugins here
 wmii.set_conf({ 
-    ["clock.fg_date"] = fg_normal,
-    ["clock.bg_date"] = bg_normal,
-    ["clock.fg_time"] = fg_focus,
-    ["clock.bg_time"] = bg_normal,
-    ["clock.fg_month"] = fg_focus,
-    ["clock.fg_today"] = bg_normal,
-    ["clock.bg_today"] = fg_normal,
-    ["clock.fg_normal"] = fg_normal,
-    ["clock.bg_normal"] = bg_normal,
-
+    ["clock.border_date"] = bg_normal,
+    ["clock.border_time"] = bg_normal,
 })
-
-if hostname then
-    if hostname:find("murdock") then
-        wmii.set_conf("400_cpufreq.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-        wmii.load_plugin ("battery")
-        wmii.set_conf("battery.names", "BAT0")
-        wmii.set_conf("volume.mixer", "LineOut")
-    end
-    if not hostname:find("uiowa") then
-        local mpd = wmii.load_plugin ("mpd")
-        mpd.register_action()
-        wmii.set_conf("301_mpd_status.colors", table.concat({"#9ec452", bg_normal, bg_normal}, ' '))
-    end
-end
 
 -- dividers for my widgets
 local divider_colors = table.concat({"#3d3d3d", bg_normal, bg_normal}, ' ')
 local i,v
-for i,v in pairs({350, 450, 850}) do
+for i,v in pairs({850}) do
     local w = wmii.widget:new(tostring(v))
     w:show("|",divider_colors)
 end
 local w = wmii.widget:new("zzz000", nil, "/lbar/")
 w:show("|",divider_colors)
+
+if hostname then
+
+    if hostname:find("murdock") then
+        wmii.load_plugin ("cpufreq")
+        wmii.set_conf("400_cpufreq.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+        wmii.set_conf("cpufreq.color_ondemand", table.concat({"#009900", bg_normal, bg_normal}, ' '))
+        wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, bg_normal}, ' '))
+
+        wmii.load_plugin ("battery")
+        wmii.set_conf("battery.names", "BAT0")
+        wmii.set_conf("battery.border_color", bg_normal)
+
+        local w = wmii.widget:new("925")
+        w:show("|",divider_colors)
+
+        wmii.set_conf("volume.mixer", "LineOut")
+    end
+
+    if hostname:find("baracus") then
+        wmii.load_plugin ("cpu")
+        wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+
+        local w = wmii.widget:new("350")
+        w:show("|",divider_colors)
+
+        local mpd = wmii.load_plugin ("mpd")
+        mpd.register_action()
+        wmii.set_conf("301_mpd_status.colors", table.concat({"#9ec452", bg_normal, bg_normal}, ' '))
+        local w = wmii.widget:new("450")
+        w:show("|",divider_colors)
+    end
+
+    if hostname:find("baracus") or hostname:find("uiowa") then
+        wmii.load_plugin ("loadavg")
+        wmii.set_conf("loadavg.bg", bg_normal)
+
+        -- i like my current window to be displayed in the taskbar
+        local client_name = wmii.widget:new("zzz100_client", nil, "/lbar/")
+
+        local wmii_client_focused = wmii.client_focused
+        local function client_focused(xid)
+            local name = wmii.read("/client/"..xid.."/label")
+            client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
+            return wmii_client_focused(xid)
+        end
+        wmii.client_focused = client_focused
+    end
+
+end
+
 
 -- my own personal ssh menu ( i keep hosts hashed )
 function show_ssh_menu()
@@ -253,7 +286,7 @@ end
 function tag_display(tag, focused)
         local colors = ""
         if focused then
-                colors = table.concat({fg_focus, bg_focus, bg_focus}, ' ')
+                colors = table.concat({fg_focus, bg_focus, border_focus}, ' ')
                 colors = colors.." "
         else
                 colors = table.concat({fg_normal, bg_normal, bg_normal}, ' ')
@@ -265,17 +298,6 @@ function tag_display(tag, focused)
 end
 wmii.tag_display = tag_display
 
-
--- i like my curren window to be displayed in the taskbar
-local client_name = wmii.widget:new("zzz100_client", nil, "/lbar/")
-
-local wmii_client_focused = wmii.client_focused
-local function client_focused(xid)
-    local name = wmii.read("/client/"..xid.."/label")
-    client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
-    return wmii_client_focused(xid)
-end
-wmii.client_focused = client_focused
 
 
 -- ------------------------------------------------------------------------

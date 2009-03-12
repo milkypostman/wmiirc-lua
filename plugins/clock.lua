@@ -22,6 +22,26 @@ wmii.set_conf ("clock.update", 1)
 wmii.set_conf ("clock.date", "%Y/%m/%d")
 wmii.set_conf ("clock.time", "%H:%M:%S")
 
+local focuscolors = wmii.get_ctl("focuscolors")
+local fg_focus, bg_focus, border_focus = focuscolors:match("(#%x+)%s+(#%x+)%s+(#%x+)")
+local normcolors = wmii.get_ctl("normcolors")
+local fg_normal, bg_normal, border_normal = normcolors:match("(#%x+)%s+(#%x+)%s+(#%x+)")
+
+wmii.set_conf({ 
+    ["clock.fg_date"] = fg_normal,
+    ["clock.bg_date"] = bg_normal,
+    ["clock.border_date"] = border_normal,
+    ["clock.fg_time"] = fg_focus,
+    ["clock.bg_time"] = bg_normal,
+    ["clock.border_time"] = border_normal,
+    ["clock.fg_month"] = fg_focus,
+    ["clock.fg_today"] = bg_normal,
+    ["clock.bg_today"] = fg_normal,
+    ["clock.fg_normal"] = fg_normal,
+    ["clock.bg_normal"] = bg_normal,
+
+})
+
 -- ------------------------------------------------------------
 -- MODULE VARIABLES
 
@@ -37,8 +57,8 @@ local timer = nil       -- the 1/second tick timer
 -- and is prefixed to the widget name. There is currently no 
 -- way to reorder a widget, but it is planed for a future release.
 --
-local date_widget = wmii.widget:new ("900_date")
-local time_widget = wmii.widget:new ("905_time")
+local date_widget = wmii.widget:new ("950_date")
+local time_widget = wmii.widget:new ("955_time")
 
 local function button_handler (ev, button)
     -- 3 is right button
@@ -125,18 +145,20 @@ local function clock_timer (time_since_update)
         local fmt = wmii.get_conf("clock.date") or "%c"
         local fg = wmii.get_conf("clock.fg_date")
         local bg = wmii.get_conf("clock.bg_date")
+        local border = wmii.get_conf("clock.border_date")
         local color = nil
-        if fg and bg then
-            color = table.concat({fg, bg, bg}, ' ')
+        if fg and bg and border then
+            color = table.concat({fg, bg, border}, ' ')
         end
         date_widget:show (os.date(fmt), color)
 
         fmt = wmii.get_conf("clock.time") or "%c"
         fg = wmii.get_conf("clock.fg_time")
         bg = wmii.get_conf("clock.bg_time")
+        border = wmii.get_conf("clock.border_time")
         color = nil
-        if fg and bg then
-            color = table.concat({fg, bg, bg}, ' ')
+        if fg and bg and border then
+            color = table.concat({fg, bg, border}, ' ')
         end
         time_widget:show (os.date(fmt), color)
 
