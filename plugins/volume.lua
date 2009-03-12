@@ -207,11 +207,17 @@ function update_volume ( new_vol )
     local value = volume:gsub("%%","")
     value = tonumber(value)
     local fg = wmii.get_conf("volume.fg_low")
-    local bg = wmii.get_conf("bg_normal")
-    if not bg then
-        local junk
-        local normcolors = get_ctl("normcolors")
-        junk, bg = normcolors:match("(#%x+)%s+(#%x+)%s#%x+")
+    local normcolors = wmii.get_ctl("normcolors")
+    local junk, bg, border = normcolors:match("(#%x+)%s+(#%x+)%s+(#%x+)")
+
+    local tmp = wmii.get_conf("volume.border_color")
+    if tmp then
+        border = tmp
+    end
+
+    local tmp = wmii.get_conf("volume.bg_color")
+    if tmp then
+        bg = tmp
     end
 
     if value then
@@ -221,7 +227,7 @@ function update_volume ( new_vol )
             fg = wmii.get_conf("volume.fg_med")
         end
     end
-	widget:show("[" .. volume .. "]", table.concat({fg, bg, bg}, ' '))
+	widget:show("[" .. volume .. "]", table.concat({fg, bg, border}, ' '))
 end
 
 local volume_before_mute = "0%"

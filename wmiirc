@@ -92,12 +92,12 @@ local term = 'urxvtc'
 --local border_focus = '#88ff88'
 --
 local fg_normal = '#cccccc'
-local bg_normal = '#222222'
+local bg_normal = '#111111'
 local border_normal = '#333333'
 
 local fg_focus = '#cd8b00'
-local bg_focus = '#007700'
-local border_focus = '#88ff88'
+local bg_focus = '#1c1f1c'
+local border_focus = '#cd8b00'
 --local border_focus = bg_focus
 
 if hostname then
@@ -171,9 +171,13 @@ wmii.write ("/tagrules", "/XMMS.*/ -> ~\n"
 
 -- load some plugins
 wmii.load_plugin ("messages")
+wmii.set_conf("messages.border_color", bg_normal)
+
 wmii.load_plugin ("clock")
 
 wmii.load_plugin ("volume")
+wmii.set_conf("volume.border_color", bg_normal)
+
 wmii.load_plugin ("browser")
 --wmii.load_plugin ("message")
 --wmii.load_plugin ("view_workdir")
@@ -188,13 +192,11 @@ wmii.set_conf({
 
 -- dividers for my widgets
 local divider_colors = table.concat({"#3d3d3d", bg_normal, bg_normal}, ' ')
-local i,v
-for i,v in pairs({850}) do
-    local w = wmii.widget:new(tostring(v))
-    w:show("|",divider_colors)
-end
-local w = wmii.widget:new("zzz000", nil, "/lbar/")
-w:show("|",divider_colors)
+--local i,v
+--local w = wmii.widget:new("850")
+--w:show("|",divider_colors)
+--local w = wmii.widget:new("zzz000", nil, "/lbar/")
+--w:show("|",divider_colors)
 
 if hostname then
 
@@ -206,10 +208,10 @@ if hostname then
 
         wmii.load_plugin ("battery")
         wmii.set_conf("battery.names", "BAT0")
-        wmii.set_conf("battery.border_color", bg_normal)
+        --wmii.set_conf("battery.border_color", bg_normal)
 
-        local w = wmii.widget:new("925")
-        w:show("|",divider_colors)
+        --local w = wmii.widget:new("925")
+        --w:show("|",divider_colors)
 
         wmii.set_conf("volume.mixer", "LineOut")
     end
@@ -218,14 +220,14 @@ if hostname then
         wmii.load_plugin ("cpu")
         wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 
-        local w = wmii.widget:new("350")
-        w:show("|",divider_colors)
+        --local w = wmii.widget:new("350")
+        --w:show("|",divider_colors)
 
         local mpd = wmii.load_plugin ("mpd")
         mpd.register_action()
         wmii.set_conf("301_mpd_status.colors", table.concat({"#9ec452", bg_normal, bg_normal}, ' '))
-        local w = wmii.widget:new("450")
-        w:show("|",divider_colors)
+        --local w = wmii.widget:new("450")
+        --w:show("|",divider_colors)
     end
 
     if hostname:find("baracus") or hostname:find("uiowa") then
@@ -286,7 +288,7 @@ end
 function tag_display(tag, focused)
         local colors = ""
         if focused then
-                colors = table.concat({fg_focus, bg_focus, border_focus}, ' ')
+                colors = table.concat({fg_focus, bg_focus, bg_focus}, ' ')
                 colors = colors.." "
         else
                 colors = table.concat({fg_normal, bg_normal, bg_normal}, ' ')

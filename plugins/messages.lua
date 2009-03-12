@@ -28,51 +28,70 @@ api_version=0.1
 
 -- local variables
 local color_index = 0
-local colors = {}
+local colors
 local color_start = {{0xFF,0xFF,0xFF}, {0xAA,0x22,0xAA}, {0xFF,0x00,0x00}}
 local color_end   = {{0x44,0x44,0x44}, {0x00,0x00,0x00}, {0x00,0x00,0x00}}
 local color_steps = 10
 
--- find the background the taskbar normally is
-local normcolors = wmii.get_ctl("normcolors")
-if normcolors then
-    local nf, nb = normcolors:match("#(%x+)%s+#(%x+)%s#%x+")
-
-    local i
-    local bg = {}
-    for n in nb:gmatch("%x%x") do
-        table.insert(bg, tonumber("0x"..n))
+local function totriple(s)
+    local n
+    local trip = {}
+    for n in s:gmatch("%x%x") do
+        table.insert(trip, tonumber("0x"..n))
     end
-
-    color_end[2] = bg
-    color_end[3] = bg
+    return trip
 end
 
--- build up the colours palett
-local i,t,r
-for i=1,color_steps do
-        local x = ""
-        for t=1,3 do
-                local s=color_start[t]
-                local e=color_end[t]
-                x = x .. '#'
-                for r=1,3 do
-                        local d = (e[r] - s[r]) / color_steps
-                        local c = math.floor(s[r] + (i * d))
-                        x = x .. string.format("%02x", c)
-                end
-                x = x .. ' '
+local function initialize_colors()
+    -- find the background the taskbar normally is
+    local normcolors = wmii.get_ctl("normcolors")
+    if normcolors then
+        local nf, nb, nborder = normcolors:match("#(%x+)%s+#(%x+)%s(#%x+)")
+
+        local cb = wmii.get_conf("messages.bg_color")
+        if cb then
+            nb = cb
         end
-        colors[i] = x
+        color_end[2] = totriple(nb)
+
+        local cborder = wmii.get_conf("messages.border_color")
+        if cborder then
+            nborder = cborder
+        end
+        color_end[3] = totriple(nborder)
+    end
+
+    colors = {}
+
+    -- build up the colours palett
+    local i,t,r
+    for i=1,color_steps do
+            local x = ""
+            for t=1,3 do
+                    local s=color_start[t]
+                    local e=color_end[t]
+                    x = x .. '#'
+                    for r=1,3 do
+                            local d = (e[r] - s[r]) / color_steps
+                            local c = math.floor(s[r] + (i * d))
+                            x = x .. string.format("%02x", c)
+                    end
+                    x = x .. ' '
+            end
+            colors[i] = x
+    end
 end
 
 -- get a widget; 0 is the first location in the /rbar, so the middle
 local widget = wmii.widget:new ("0")
-widget:show("", colors[color_steps])
 
 -- function that cycles the colours
 local timer = wmii.timer:new (function (time_since_update)
         color_index = color_index + 1
+        if not colors then
+            initialize_colors()
+            color_index = #colors
+        end
         if not colors[color_index] then
                 return -1
         end
@@ -90,6 +109,8 @@ wmii.add_event_handler ("msg", function (ev, args)
         widget:show (tostring(args), colors[color_index])
         timer:resched(1)
 end)
+
+timer:resched(1)
 
 
 

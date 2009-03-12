@@ -50,6 +50,10 @@ local function loadavg_timer (time_since_update)
 				local index  = math.min(math.floor(current_avg * (#palette-1)) + 1, #palette)
                 local bg = wmii.get_conf("loadavg.bg")
                 if bg then
+                    local border = wmii.get_conf("loadavg.bg")
+                    if not border then
+                        border = bg
+                    end
                     colors = table.concat({palette[index], bg, bg}, ' ')
                 else
                     local normal = wmii.get_ctl("normcolors")
