@@ -124,7 +124,7 @@ function update ( new_vol )
 		   if txt == str then
 			   txt = "2x " .. txt
 		   else
-               txt = txt .. create_string(cpu) .. space
+               txt = txt .. space .. str
 		   end
 		   space = " "
        end
