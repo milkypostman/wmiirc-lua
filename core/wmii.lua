@@ -1817,7 +1817,7 @@ function widget:new (name, fn, bar)
                 if type(fn) == "function" then
                         o.fn = fn
                 end
-                o.bar = bar or "/rbar/"
+                o.bar = bar or "rbar"
         else
                 error ("expected name followed by an optional function as arguments")
         end
@@ -1855,9 +1855,9 @@ function widget:show (txt, colors)
                 towrite = colors .. " " .. towrite
         end
         if not self.txt then
-                create (self.bar.. self.name, towrite)
+                create ('/'..self.bar..'/'.. self.name, towrite)
         else
-                write (self.bar.. self.name, towrite)
+                write ('/'..self.bar..'/'.. self.name, towrite)
         end
         self.txt = txt
 end
@@ -1866,7 +1866,7 @@ end
 -- hides a widget and removes it from the bar
 function widget:hide ()
         if self.txt then
-                remove (self.bar .. self.name)
+                remove ('/'..self.bar ..'/'.. self.name)
                 self.txt = nil
         end
 end
@@ -2156,7 +2156,7 @@ end
 local focused_xid = nil
 local clients = {}              -- table of client objects indexed by xid
 local programs = {}             -- table of program objects indexed by pid
-local mode_widget = widget:new ("zzz105_client_mode", nil, "/lbar/")
+local mode_widget = widget:new ("zzz105_client_mode", nil, "lbar")
 
 -- make programs table have weak values
 -- programs go away as soon as no clients point to it

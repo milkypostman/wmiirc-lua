@@ -236,7 +236,7 @@ if hostname then
         wmii.set_conf("loadavg.bg", bg_normal)
 
         -- i like my current window to be displayed in the taskbar
-        local client_name = wmii.widget:new("zzz100_client", nil, "/lbar/")
+        local client_name = wmii.widget:new("zzz100_client", nil, "lbar")
 
         local wmii_client_focused = wmii.client_focused
         local function client_focused(xid)
