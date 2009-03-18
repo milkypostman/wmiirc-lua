@@ -55,8 +55,8 @@ It should be used by your wmiirc
 -- MODULE SETUP
 -- ========================================================================
 
-local wmiidir = os.getenv("HOME") .. "/.wmii-lua"
-local wmiirc = wmiidir .. "/wmiirc"
+local wmiidir = wmiidir or os.getenv("HOME") .. "/.wmii-lua"
+print(wmiidir)
 
 package.path  = wmiidir .. "/core/?.lua;" ..
                 wmiidir .. "/plugins/?.lua;" ..
@@ -145,26 +145,29 @@ local action_hist = history.new(10)
 -- where to find plugins
 plugin_paths = {}
 
-table.insert(plugin_paths, os.getenv("HOME") .. "/.wmii-lua/plugins/?.so")
-table.insert(plugin_paths, os.getenv("HOME") .. "/.wmii-lua/plugins/?.lua")
-
 for path in string.gmatch(package.path, "[^;]+") do
-    if not path:find("^./") and not path:find("core") and not path:find("plugins") then
+    local wmd = path:gsub("%?.*$", "wmii")
+    local stat = posix.stat(wmd)
+    table.insert(plugin_paths, path)
+    if stat and stat.type == "directory" then
         local path = path:gsub("%?", "wmii/?")
         table.insert(plugin_paths, path)
     end
 end
 
 for path in string.gmatch(package.cpath, "[^;]+") do
-    if not path:find("^./") and not path:find("core") and not path:find("plugins") and not path:find("loadall.so") then
+    local wmd = path:gsub("%?.*$", "wmii")
+    local stat = posix.stat(wmd)
+    table.insert(plugin_paths, path)
+    if stat and stat.type == "directory" then
         local path = path:gsub("%?", "wmii/?")
         table.insert(plugin_paths, path)
     end
 end
 
 -- where to find wmiirc (see find_wmiirc())
-wmiirc_path = os.getenv("HOME") .. "/.wmii-lua/wmiirc.lua;"
-           .. os.getenv("HOME") .. "/.wmii-lua/wmiirc;"
+wmiirc_path = wmiidir.."/wmiirc.lua;"
+           .. wmiidir.."/wmiirc;"
            .. "/etc/wmii-lua//wmiirc.lua;"
            .. "/etc/wmii-lua//wmiirc"
 
