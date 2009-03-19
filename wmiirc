@@ -86,24 +86,35 @@ local term = 'urxvtc'
 --local fg_focus = '#98aeff'
 --local bg_focus = '#1c1c1c'
 --local border_focus = '#cd8b00'
---
-local fg_focus = '#ffffaa'
-local bg_focus = '#007700'
-local border_focus = '#88ff88'
 
+--local fg_focus = '#ffffaa'
+--local bg_focus = '#007700'
+--local border_focus = '#88ff88'
+
+local fg_focus = '#ffffff'
+local bg_focus = '#0066ff'
+local border_focus = '#0066ff'
+
+--static const char selbordercolor[]  = "#0066ff";
+--static const char selbgcolor[]      = "#0066ff";
+--static const char selfgcolor[]      = "#ffffff";
+--
 --local fg_focus = '#cd8b00'
 --local bg_focus = '#1c1f1c'
 --local border_focus = '#cd8b00'
 --local border_focus = bg_focus
 --
-local fg_normal = '#cccccc'
-local bg_normal = '#111111'
-local border_normal = '#333333'
+--local fg_normal = '#cccccc'
+--local bg_normal = '#111111'
+--local border_normal = '#333333'
 
---local fg_tag_focus = '#ffffaa'
-local fg_tag_focus = '#ffe4ab'
-local bg_tag_focus = '#1c1c1c'
-local border_tag_focus = '#cd8b00'
+local fg_normal = '#000000'
+local bg_normal = '#cccccc'
+local border_normal = '#cccccc'
+
+--static const char normbordercolor[] = "#cccccc";
+--static const char normbgcolor[]     = "#cccccc";
+--static const char normfgcolor[]     = "#000000";
 
 if hostname then
     if hostname:find("uiowa") then
@@ -147,7 +158,8 @@ wmii.set_conf ({
 -- n'th given width percentage of the screen is given to it.  If there is 
 -- no nth width, 1/ncolth of the screen is given to it.
 --
-wmii.write ("/colrules", "/.*/ -> 70+30\n"
+wmii.write ("/colrules", "/.*/ -> 50+50\n"
+                      .. "/main/ -> 65+35\n"
                       .. "/gaim/ -> 80+20\n")
 
 -- tagrules file contains a list of riles which affect which tags are 
@@ -174,10 +186,16 @@ wmii.write ("/tagrules", "/XMMS.*/ -> ~\n"
 
 -- load some plugins
 wmii.load_plugin ("messages")
+wmii.set_conf("messages.fg", bg_normal)
+wmii.set_conf("messages.bg", bg_focus)
+wmii.set_conf("messages.border", border_focus)
 
 wmii.load_plugin ("clock")
 
 wmii.load_plugin ("volume")
+wmii.set_conf("volume.fg_low", "#777777")
+wmii.set_conf("volume.fg_med", "#007700")
+wmii.set_conf("volume.fg_high", "#cc0000")
 
 wmii.load_plugin ("browser")
 --wmii.load_plugin ("message")
@@ -201,8 +219,7 @@ if hostname then
         wmii.set_conf("cpufreq.color_ondemand", table.concat({"#009900", bg_normal, border_normal}, ' '))
         wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, border_normal}, ' '))
 
-        wmii.set_conf("clock.fg_time", fg_tag_focus)
-
+        wmii.set_conf("clock.fg_time", bg_focus)
 
         wmii.load_plugin ("battery")
         wmii.set_conf("battery.names", "BAT0")
@@ -254,7 +271,7 @@ if hostname then
         end
         wmii.client_focused = client_focused
 
-        border_tag_focus = bg_tag_focus
+        border_focus = bg_focus
         border_normal = bg_normal
     end
 
@@ -264,7 +281,7 @@ end
 function tag_display(tag, focused)
     local colors = ""
     if focused then
-        colors = table.concat({fg_tag_focus, bg_tag_focus, border_tag_focus}, ' ')
+        colors = table.concat({fg_focus, bg_focus, border_focus}, ' ')
         colors = colors.." "
     else
         colors = table.concat({fg_normal, bg_normal, border_normal}, ' ')

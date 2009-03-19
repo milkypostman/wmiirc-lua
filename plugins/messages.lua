@@ -48,17 +48,14 @@ local function initialize_colors()
     if normcolors then
         local nf, nb, nborder = normcolors:match("#(%x+)%s+#(%x+)%s(#%x+)")
 
-        local cb = wmii.get_conf("messages.bg_color")
-        if cb then
-            nb = cb
-        end
-        color_end[2] = totriple(nb)
+        local cf = wmii.get_conf("messages.fg") or nf
+        color_end[1] = totriple(cf)
 
-        local cborder = wmii.get_conf("messages.border_color")
-        if cborder then
-            nborder = cborder
-        end
-        color_end[3] = totriple(nborder)
+        local cb = wmii.get_conf("messages.bg") or nb
+        color_end[2] = totriple(cb)
+
+        local cborder = wmii.get_conf("messages.border") or nborder
+        color_end[3] = totriple(cborder)
     end
 
     colors = {}

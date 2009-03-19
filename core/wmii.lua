@@ -2159,7 +2159,7 @@ end
 local focused_xid = nil
 local clients = {}              -- table of client objects indexed by xid
 local programs = {}             -- table of program objects indexed by pid
-local mode_widget = widget:new ("zzz105_client_mode", nil, "lbar")
+local mode_widget = widget:new ("100_client_mode", nil)
 
 -- make programs table have weak values
 -- programs go away as soon as no clients point to it
