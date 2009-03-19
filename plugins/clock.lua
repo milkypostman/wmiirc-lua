@@ -18,9 +18,9 @@ api_version=0.1         -- api version, see doc/plugin-api
 --
 -- these can be overridden by wmiirc
 
-wmii.set_conf ("clock.update", 1)
-wmii.set_conf ("clock.date", "%Y/%m/%d")
-wmii.set_conf ("clock.time", "%H:%M:%S")
+wmii.set_conf ("clock.update", wmii.get_conf("clock.update") or 1)
+wmii.set_conf ("clock.date", wmii.get_conf("clock.date") or "%Y/%m/%d")
+wmii.set_conf ("clock.time", wmii.get_conf("clock.time") or "%H:%M:%S")
 
 -- ------------------------------------------------------------
 -- MODULE VARIABLES

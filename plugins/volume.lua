@@ -139,13 +139,13 @@ api_version = 0.1
 --
 -- these can be overridden by wmiirc
 
-wmii.set_conf ("volume.update", 10);
-wmii.set_conf ("volume.mixer", "Master");
-wmii.set_conf ("volume.high", 77);
-wmii.set_conf ("volume.med", 38);
-wmii.set_conf ("volume.fg_high", "#ff8d8d");
-wmii.set_conf ("volume.fg_med", "#c8e7a8");
-wmii.set_conf ("volume.fg_low", "#aaaaaa");
+wmii.set_conf ("volume.update", wmii.get_conf("volume.update") or 10);
+wmii.set_conf ("volume.mixer", wmii.get_conf("volume.mixer") or "Master");
+wmii.set_conf ("volume.high", wmii.get_conf("volume.high") or 77);
+wmii.set_conf ("volume.med", wmii.get_conf("volume.med") or 38);
+wmii.set_conf ("volume.fg_high", wmii.get_conf("volume.fg_high") or "#ff8d8d");
+wmii.set_conf ("volume.fg_med", wmii.get_conf("volume.fg_med") or "#c8e7a8");
+wmii.set_conf ("volume.fg_low", wmii.get_conf("volume.fg_low") or "#aaaaaa");
 
 
 -- ------------------------------------------------------------

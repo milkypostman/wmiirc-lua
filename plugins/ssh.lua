@@ -47,7 +47,7 @@ local type = type
 module ("ssh")
 api_version=0.1
 
-wmii.set_conf ("ssh.askforuser", true);
+wmii.set_conf ("ssh.askforuser", wmii.get_conf("ssh.askforuser") or true);
 
 local hosts
 local users

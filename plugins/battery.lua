@@ -149,26 +149,26 @@ api_version=0.1
 --
 -- Configuration Settings
 --
-wmii.set_conf ("battery.poll_rate", 30)
+wmii.set_conf ("battery.poll_rate", wmii.get_conf("battery.poll_rate") or 30)
 
-wmii.set_conf ("battery.names", "BAT0")
+wmii.set_conf ("battery.names", wmii.get_conf("battery.names") or "BAT0")
 
-wmii.set_conf ("battery.low", 15)
-wmii.set_conf ("battery.low_fgcolor", "#000000")
-wmii.set_conf ("battery.low_bgcolor", "#FFFF66")
-wmii.set_conf ("battery.low_action",  'echo "Low battery" | xmessage -center -buttons quit:0 -default quit -file -')
+wmii.set_conf ("battery.low", wmii.get_conf("battery.low") or 15)
+wmii.set_conf ("battery.low_fgcolor", wmii.get_conf("battery.low_fgcolor") or "#000000")
+wmii.set_conf ("battery.low_bgcolor", wmii.get_conf("battery.low_bgcolor") or "#FFFF66")
+wmii.set_conf ("battery.low_action", wmii.get_conf("battery.low_action") or  'echo "Low battery" | xmessage -center -buttons quit:0 -default quit -file -')
 
-wmii.set_conf ("battery.critical", 5)
-wmii.set_conf ("battery.critical_fgcolor", "#000000")
-wmii.set_conf ("battery.critical_bgcolor", "#FF0000")
-wmii.set_conf ("battery.critical_action",  'echo "Critical battery" | xmessage -center -buttons quit:0 -default quit -file -')
+wmii.set_conf ("battery.critical", wmii.get_conf("battery.critical") or 5)
+wmii.set_conf ("battery.critical_fgcolor", wmii.get_conf("battery.critical_fgcolor") or "#000000")
+wmii.set_conf ("battery.critical_bgcolor", wmii.get_conf("battery.critical_bgcolor") or "#FF0000")
+wmii.set_conf ("battery.critical_action", wmii.get_conf("battery.critical_action") or  'echo "Critical battery" | xmessage -center -buttons quit:0 -default quit -file -')
 
 -- Should not need to be modified on Linux
-wmii.set_conf ("battery.statefile", "/proc/acpi/battery/%s/state")
-wmii.set_conf ("battery.infofile",  "/proc/acpi/battery/%s/info")
+wmii.set_conf ("battery.statefile", wmii.get_conf("battery.statefile") or "/proc/acpi/battery/%s/state")
+wmii.set_conf ("battery.infofile", wmii.get_conf("battery.infofile") or  "/proc/acpi/battery/%s/info")
 
-wmii.set_conf ("battery.showtime", true)
-wmii.set_conf ("battery.showrate", true)
+wmii.set_conf ("battery.showtime", wmii.get_conf("battery.showtime") or true)
+wmii.set_conf ("battery.showrate", wmii.get_conf("battery.showrate") or true)
 
 --
 -- Local Variables

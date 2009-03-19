@@ -51,8 +51,8 @@ api_version=0.1
 
 -- ------------------------------------------------------------
 -- Configuration Settings
-wmii.set_conf ("mpd.server", "127.0.0.1")
-wmii.set_conf ("mpd.port", "6600")
+wmii.set_conf ("mpd.server", wmii.get_conf("mpd.server") or "127.0.0.1")
+wmii.set_conf ("mpd.port", wmii.get_conf("mpd.port") or "6600")
 
 -- ------------------------------------------------------------
 -- Init Plugin
