@@ -22,26 +22,6 @@ wmii.set_conf ("clock.update", 1)
 wmii.set_conf ("clock.date", "%Y/%m/%d")
 wmii.set_conf ("clock.time", "%H:%M:%S")
 
-local focuscolors = wmii.get_ctl("focuscolors")
-local fg_focus, bg_focus, border_focus = focuscolors:match("(#%x+)%s+(#%x+)%s+(#%x+)")
-local normcolors = wmii.get_ctl("normcolors")
-local fg_normal, bg_normal, border_normal = normcolors:match("(#%x+)%s+(#%x+)%s+(#%x+)")
-
-wmii.set_conf({ 
-    ["clock.fg_date"] = fg_normal,
-    ["clock.bg_date"] = bg_normal,
-    ["clock.border_date"] = border_normal,
-    ["clock.fg_time"] = fg_focus,
-    ["clock.bg_time"] = bg_normal,
-    ["clock.border_time"] = border_normal,
-    ["clock.fg_month"] = fg_focus,
-    ["clock.fg_today"] = bg_normal,
-    ["clock.bg_today"] = fg_normal,
-    ["clock.fg_normal"] = fg_normal,
-    ["clock.bg_normal"] = bg_normal,
-
-})
-
 -- ------------------------------------------------------------
 -- MODULE VARIABLES
 
@@ -64,16 +44,15 @@ local function button_handler (ev, button)
     -- 3 is right button
     if button == 1 or button == 3 then
         local normcolors = wmii.get_ctl("normcolors")
-        local fg_normal, bg_normal = normcolors:match("(#%x+)%s+(#%x+)%s#%x+")
+        local fg_normal, bg_normal, border_normal = normcolors:match("(#%x+)%s+(#%x+)%s(#%x+)")
         fg_normal = wmii.get_conf("clock.fg_normal") or fg_normal
         bg_normal = wmii.get_conf("clock.bg_normal") or bg_normal
 
-        local fg_month = wmii.get_conf("clock.fg_month")
-        local bg_month = wmii.get_conf("clock.bg_month")
+        local fg_month = wmii.get_conf("clock.fg_month") or fg_normal
+        local bg_month = wmii.get_conf("clock.bg_month") or bg_normal
 
         local fg_today = wmii.get_conf("clock.fg_today") or bg_normal
         local bg_today = wmii.get_conf("clock.bg_today") or fg_normal
-
 
         local tmp = os.tmpname()
         local out = io.open(tmp, 'w')
@@ -142,10 +121,13 @@ time_widget:add_event_handler("RightBarClick", button_handler)
 -- timer function returns a number 
 
 local function clock_timer (time_since_update)
+        local normcolors = wmii.get_ctl("normcolors")
+        local fg_normal, bg_normal, border_normal = normcolors:match("(#%x+)%s+(#%x+)%s(#%x+)")
+
         local fmt = wmii.get_conf("clock.date") or "%c"
-        local fg = wmii.get_conf("clock.fg_date")
-        local bg = wmii.get_conf("clock.bg_date")
-        local border = wmii.get_conf("clock.border_date")
+        local fg = wmii.get_conf("clock.fg_date") or fg_normal
+        local bg = wmii.get_conf("clock.bg_date") or bg_normal
+        local border = wmii.get_conf("clock.border_date") or border_normal
         local color = nil
         if fg and bg and border then
             color = table.concat({fg, bg, border}, ' ')
@@ -153,9 +135,9 @@ local function clock_timer (time_since_update)
         date_widget:show (os.date(fmt), color)
 
         fmt = wmii.get_conf("clock.time") or "%c"
-        fg = wmii.get_conf("clock.fg_time")
-        bg = wmii.get_conf("clock.bg_time")
-        border = wmii.get_conf("clock.border_time")
+        fg = wmii.get_conf("clock.fg_time") or fg_normal
+        bg = wmii.get_conf("clock.bg_time") or bg_normal
+        border = wmii.get_conf("clock.border_time") or border_normal
         color = nil
         if fg and bg and border then
             color = table.concat({fg, bg, border}, ' ')

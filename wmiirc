@@ -66,55 +66,7 @@ io.stderr:write("Found HOME: "..homedir.."\n")
 -- local configuration variables used 
 -- to generate the global config
 local term = 'urxvtc'
-
---local fg_normal = '#e4eaf2'
---local bg_normal = '#07101f'
---local border_normal = '#07101f'
-
---local fg_focus = '#3e383c'
---local fg_focus = '#f09f29'
---local fg_focus = '#6a98c9'
-
---local fg_focus = '#f09f29'
---local bg_focus = '#0d1f38'
---local border_focus = '#07101f'
-
---local fg_normal = '#cccccc'
---local bg_normal = '#000000'
---local border_normal = '#7a7a7a'
-
---local fg_focus = '#98aeff'
---local bg_focus = '#1c1c1c'
---local border_focus = '#cd8b00'
-
---local fg_focus = '#ffffaa'
---local bg_focus = '#007700'
---local border_focus = '#88ff88'
-
-local fg_focus = '#ffffff'
-local bg_focus = '#0066ff'
-local border_focus = '#0066ff'
-
---static const char selbordercolor[]  = "#0066ff";
---static const char selbgcolor[]      = "#0066ff";
---static const char selfgcolor[]      = "#ffffff";
---
---local fg_focus = '#cd8b00'
---local bg_focus = '#1c1f1c'
---local border_focus = '#cd8b00'
---local border_focus = bg_focus
---
---local fg_normal = '#cccccc'
---local bg_normal = '#111111'
---local border_normal = '#333333'
-
-local fg_normal = '#000000'
-local bg_normal = '#cccccc'
-local border_normal = '#cccccc'
-
---static const char normbordercolor[] = "#cccccc";
---static const char normbgcolor[]     = "#cccccc";
---static const char normfgcolor[]     = "#000000";
+local theme = os.getenv("HOME").."/.wmii-hg/themes/dwm.lua"
 
 if hostname then
     if hostname:find("uiowa") then
@@ -126,9 +78,9 @@ end
 wmii.set_ctl ({
         border      = 0,
         font        = '-*-terminus-*-*-*-*-*-*-*-*-*-*-*-*',
-        normcolors  = table.concat({fg_normal, bg_normal, border_normal}, ' '),
-        focuscolors = table.concat({fg_focus, bg_focus, border_focus}, ' '),
         grabmod     = 'Mod1',
+        focuscolors = '#FFFFaa #007700 #88ff88',
+        normcolors  = '#FFFFFF #222222 #333333',
         bar         = 'on top',
         incmode     = 'ignore',
 })
@@ -143,11 +95,13 @@ wmii.set_ctl ({
 wmii.set_conf ({
         xterm = term,
         -- xlock = '/usr/bin/xtrlock',
+        fg_focus = '#FFFFaa',
+        bg_focus = '#007700',
+        border_focus = '#88ff88',
+        fg_normal  = '#FFFFFF',
+        bg_normal = '#222222',
+        border_normal = '#333333',
         debug = true,
-        fg_normal = fg_normal,
-        fg_focus = fg_focus,
-        bg_normal = bg_normal,
-        bg_focus = bg_focus,
 })
 
 
@@ -186,16 +140,10 @@ wmii.write ("/tagrules", "/XMMS.*/ -> ~\n"
 
 -- load some plugins
 wmii.load_plugin ("messages")
-wmii.set_conf("messages.fg", bg_normal)
-wmii.set_conf("messages.bg", bg_focus)
-wmii.set_conf("messages.border", border_focus)
 
 wmii.load_plugin ("clock")
 
 wmii.load_plugin ("volume")
-wmii.set_conf("volume.fg_low", "#777777")
-wmii.set_conf("volume.fg_med", "#007700")
-wmii.set_conf("volume.fg_high", "#cc0000")
 
 wmii.load_plugin ("browser")
 --wmii.load_plugin ("message")
@@ -205,6 +153,7 @@ wmii.load_plugin ("ssh")
 
 -- dividers for my widgets
 local divider_colors = table.concat({"#3d3d3d", bg_normal, bg_normal}, ' ')
+
 --local i,v
 --local w = wmii.widget:new("850")
 --w:show("|",divider_colors)
@@ -215,50 +164,18 @@ if hostname then
 
     if hostname:find("murdock") then
         wmii.load_plugin ("cpufreq")
-        --wmii.set_conf("400_cpufreq.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-        wmii.set_conf("cpufreq.color_ondemand", table.concat({"#009900", bg_normal, border_normal}, ' '))
-        wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, border_normal}, ' '))
-
-        wmii.set_conf("clock.fg_time", bg_focus)
-
         wmii.load_plugin ("battery")
-        wmii.set_conf("battery.names", "BAT0")
-        --wmii.set_conf("battery.border_color", bg_normal)
-
-        --local w = wmii.widget:new("925")
-        --w:show("|",divider_colors)
-
-        wmii.set_conf("volume.mixer", "LineOut")
     end
 
     if hostname:find("baracus") then
         wmii.load_plugin ("cpu")
-        wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-
-        --local w = wmii.widget:new("350")
-        --w:show("|",divider_colors)
 
         local mpd = wmii.load_plugin ("mpd")
         mpd.register_action()
-        wmii.set_conf("301_mpd_status.colors", table.concat({"#9ec452", bg_normal, bg_normal}, ' '))
-        --local w = wmii.widget:new("450")
-        --w:show("|",divider_colors)
     end
 
     if hostname:find("baracus") or hostname:find("uiowa") then
-        wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-        wmii.set_conf("zzz105_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-
-        wmii.set_conf({ 
-            ["clock.border_date"] = bg_normal,
-            ["clock.border_time"] = bg_normal,
-        })
-
-        wmii.set_conf("messages.border_color", bg_normal)
-        wmii.set_conf("volume.border_color", bg_normal)
-
         wmii.load_plugin ("loadavg")
-        wmii.set_conf("loadavg.bg", bg_normal)
 
         -- i like my current window to be displayed in the taskbar
         local client_name = wmii.widget:new("zzz100_client", nil, "lbar")
@@ -266,13 +183,14 @@ if hostname then
         local wmii_client_focused = wmii.client_focused
         local function client_focused(xid)
             local name = wmii.read("/client/"..xid.."/label")
+            local fg_normal = wmii.get_conf("fg_normal")
+            local bg_normal = wmii.get_conf("bg_normal")
+            local border_normal = wmii.get_conf("border_normal")
             client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
             return wmii_client_focused(xid)
         end
         wmii.client_focused = client_focused
 
-        border_focus = bg_focus
-        border_normal = bg_normal
     end
 
 end
@@ -281,9 +199,17 @@ end
 function tag_display(tag, focused)
     local colors = ""
     if focused then
+        local fg_focus = wmii.get_conf("fg_focus")
+        local bg_focus = wmii.get_conf("bg_focus")
+        local border_focus = wmii.get_conf("border_focus")
+
         colors = table.concat({fg_focus, bg_focus, border_focus}, ' ')
         colors = colors.." "
     else
+        local fg_normal = wmii.get_conf("fg_normal")
+        local bg_normal = wmii.get_conf("bg_normal")
+        local border_normal = wmii.get_conf("border_normal")
+
         colors = table.concat({fg_normal, bg_normal, border_normal}, ' ')
         colors = colors.." "
     end
@@ -328,6 +254,13 @@ wmii.add_key_handler ("Mod4-2", function(key, num)
 end
 )
 
+
+
+
+-- execute our theme file
+if theme then
+    dofile(theme)
+end
 
 
 -- ------------------------------------------------------------------------
