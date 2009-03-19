@@ -104,6 +104,10 @@ wmii.set_conf ({
         debug = true,
 })
 
+-- execute our theme file
+if theme then
+    dofile(theme)
+end
 
 -- colrules file contains a list of rules which affect the width of newly 
 -- created columns.  Rules have a form of
@@ -256,11 +260,6 @@ end
 
 
 
-
--- execute our theme file
-if theme then
-    dofile(theme)
-end
 
 
 -- ------------------------------------------------------------------------
