@@ -72,6 +72,9 @@ if hostname then
     if hostname:find("uiowa") then
         term = "gnome-terminal"
     end
+    if hostname:find("murdock") then
+        theme = os.getenv("HOME").."/.wmii-hg/themes/shiki.lua"
+    end
 end
 
 -- This is the base configuration of wmii, it writes to the /ctl file.

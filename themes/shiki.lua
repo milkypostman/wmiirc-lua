@@ -41,13 +41,13 @@ local wmii = wmii
 --static const char normbgcolor[]     = "#cccccc";
 --static const char normfgcolor[]     = "#000000";
 
-fg_focus = '#ffffff'
-bg_focus = '#0066ff'
-border_focus = '#0066ff'
+fg_normal = '#cccccc'
+bg_normal = '#111111'
+border_normal = '#333333'
 
-fg_normal = '#000000'
-bg_normal = '#cccccc'
-border_normal = '#cccccc'
+fg_focus = '#cd8b00'
+bg_focus = '#1c1f1c'
+border_focus = '#cd8b00'
 
 wmii.set_ctl({
         normcolors  = table.concat({fg_normal, bg_normal, border_normal}, ' '),
@@ -65,9 +65,9 @@ wmii.set_conf ({
         })
 
 
-wmii.set_conf("messages.fg", bg_normal)
-wmii.set_conf("messages.bg", bg_focus)
-wmii.set_conf("messages.border", border_focus)
+wmii.set_conf("messages.fg", border_normal)
+wmii.set_conf("messages.bg", bg_normal)
+wmii.set_conf("messages.border", border_normal)
 
 wmii.set_conf("volume.fg_low", "#777777")
 wmii.set_conf("volume.fg_med", "#007700")
@@ -76,7 +76,8 @@ wmii.set_conf("volume.fg_high", "#cc0000")
 wmii.set_conf("cpufreq.color_ondemand", table.concat({"#009900", bg_normal, border_normal}, ' '))
 wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, border_normal}, ' '))
 
-wmii.set_conf("clock.fg_time", bg_focus)
+wmii.set_conf("clock.fg_time", fg_focus)
+
 
 wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 
@@ -85,13 +86,7 @@ wmii.set_conf("301_mpd_status.colors", table.concat({bg_focus, bg_normal, bg_nor
 wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 wmii.set_conf("zzz105_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 
-wmii.set_conf({ 
-    ["clock.border_date"] = bg_normal,
-    ["clock.border_time"] = bg_normal,
-})
-
 wmii.set_conf("volume.border_color", bg_normal)
 
 wmii.set_conf("loadavg.bg", bg_normal)
-
 
