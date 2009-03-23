@@ -63,10 +63,11 @@ wmii.set_ctl({
 
 wmii.set_conf ({
         fg_normal = fg_normal,
-        fg_focus = fg_focus,
         bg_normal = bg_normal,
-        bg_focus = bg_focus,
         border_normal = border_normal,
+
+        fg_focus = fg_focus,
+        bg_focus = bg_focus,
         border_focus = border_focus,
         })
 
@@ -92,7 +93,7 @@ if hostname then
     if hostname:find("baracus") then
         wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 
-        wmii.set_conf("301_mpd_status.colors", table.concat({"#9ec452", bg_normal, bg_normal}, ' '))
+        wmii.set_conf("301_mpd_status.colors", table.concat({bg_focus, bg_normal, bg_normal}, ' '))
     end
 
     if hostname:find("baracus") or hostname:find("uiowa") then
@@ -108,17 +109,6 @@ if hostname then
         wmii.set_conf("volume.border_color", bg_normal)
 
         wmii.set_conf("loadavg.bg", bg_normal)
-
-        -- i like my current window to be displayed in the taskbar
-        local client_name = wmii.widget:new("zzz100_client", nil, "lbar")
-
-        local wmii_client_focused = wmii.client_focused
-        local function client_focused(xid)
-            local name = wmii.read("/client/"..xid.."/label")
-            client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
-            return wmii_client_focused(xid)
-        end
-        wmii.client_focused = client_focused
 
     end
 

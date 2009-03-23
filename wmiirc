@@ -116,9 +116,10 @@ end
 -- n'th given width percentage of the screen is given to it.  If there is 
 -- no nth width, 1/ncolth of the screen is given to it.
 --
-wmii.write ("/colrules", "/.*/ -> 50+50\n"
-                      .. "/main/ -> 65+35\n"
-                      .. "/gaim/ -> 80+20\n")
+wmii.write ("/colrules", "/main/ -> 65+35\n"
+                      .. "/gaim/ -> 80+20\n"
+                      .. "/.*/ -> 50+50\n"
+                      )
 
 -- tagrules file contains a list of riles which affect which tags are 
 -- applied to a new client.  Rules has a form of
@@ -190,9 +191,9 @@ if hostname then
         local wmii_client_focused = wmii.client_focused
         local function client_focused(xid)
             local name = wmii.read("/client/"..xid.."/label")
-            local fg_normal = wmii.get_conf("fg_normal")
-            local bg_normal = wmii.get_conf("bg_normal")
-            local border_normal = wmii.get_conf("border_normal")
+            local fg_normal = wmii.get_conf("fg_focus")
+            local bg_normal = wmii.get_conf("bg_focus")
+            local border_normal = wmii.get_conf("border_focus")
             client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
             return wmii_client_focused(xid)
         end
