@@ -230,7 +230,7 @@ function update_volume ( new_vol )
 	widget:show("[" .. volume .. "]", table.concat({fg, bg, border}, ' '))
 end
 
-local volume_before_mute = "0%"
+--local volume_before_mute = "0%"
 local function button_handler (ev, button)
 
 	wmii.log("button_handler(" .. ev .. "," .. button .. ")")
@@ -240,14 +240,14 @@ local function button_handler (ev, button)
 		-- middle click
 	elseif button == 3 then
 		-- right click
-		local action
-        local vol = mixer_get_volume()
-		if vol ~= "0%" then
-			volume_before_mute = vol
-            action = "0%"
-        else
-			action = volume_before_mute
-		end
+		local action = "toggle"
+        --local vol = mixer_get_volume()
+		--if vol == "" then
+			--volume_before_mute = vol
+            --action = "0%"
+        --else
+			--action = volume_before_mute
+		--end
 		update_volume( action )
 	elseif button == 4 then
 		-- scroll up

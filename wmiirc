@@ -169,6 +169,9 @@ if hostname then
     if hostname:find("murdock") then
         wmii.load_plugin ("cpufreq")
         wmii.load_plugin ("battery")
+        wmii.set_conf("battery.names", "BAT0")
+
+        wmii.set_conf("volume.mixer", "LineOut")
     end
 
     if hostname:find("baracus") then

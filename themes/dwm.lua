@@ -87,10 +87,6 @@ if hostname then
 
         wmii.set_conf("clock.fg_time", bg_focus)
 
-        wmii.load_plugin ("battery")
-        wmii.set_conf("battery.names", "BAT0")
-
-        wmii.set_conf("volume.mixer", "LineOut")
     end
 
     if hostname:find("baracus") then
