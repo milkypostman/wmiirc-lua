@@ -83,10 +83,10 @@ wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, 
 
 wmii.set_conf("301_mpd_status.colors", table.concat({bg_focus, bg_normal, bg_normal}, ' '))
 
-wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
-wmii.set_conf("zzz105_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+--wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+--wmii.set_conf("zzz105_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 
-wmii.set_conf("volume.border_color", bg_normal)
+--wmii.set_conf("volume.border_color", bg_normal)
 
 wmii.set_conf("loadavg.bg", bg_normal)
 
