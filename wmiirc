@@ -186,10 +186,12 @@ if hostname then
     end
 
     if hostname:find("baracus") or hostname:find("uiowa") then
+        wmii.mode_widget:delete()
+        wmii.mode_widget = wmii.widget:new ("zzz888_client_mode", nil, "lbar")
         wmii.load_plugin ("loadavg")
 
         -- i like my current window to be displayed in the taskbar
-        local client_name = wmii.widget:new("zzz100_client", nil, "lbar")
+        local client_name = wmii.widget:new("zzz999_client", nil, "lbar")
 
         local wmii_client_focused = wmii.client_focused
         local function client_focused(xid)
