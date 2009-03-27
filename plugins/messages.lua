@@ -46,7 +46,7 @@ local function initialize_colors()
     -- find the background the taskbar normally is
     local normcolors = wmii.get_ctl("normcolors")
     if normcolors then
-        local nf, nb, nborder = normcolors:match("#(%x+)%s+#(%x+)%s(#%x+)")
+        local nf, nb, nborder = normcolors:match("#(%x+)%s+#(%x+)%s#(%x+)")
 
         local cf = wmii.get_conf("messages.fg") or nf
         color_end[1] = totriple(cf)
@@ -84,6 +84,7 @@ local widget = wmii.widget:new ("0")
 
 -- function that cycles the colours
 local timer = wmii.timer:new (function (time_since_update)
+        wmii.log("timer:new")
         color_index = color_index + 1
         if not colors then
             initialize_colors()
@@ -99,8 +100,6 @@ end)
 
 -- finally, an event we can listen for
 wmii.add_event_handler ("msg", function (ev, args)
-        wmii.log("msg: " .. tostring(args))
-
         timer:stop()
         color_index = 1
         widget:show (tostring(args), colors[color_index])

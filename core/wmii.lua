@@ -147,15 +147,13 @@ plugin_paths = {}
 
 for path in string.gmatch(package.path, "[^;]+") do
     local wmd = path:gsub("%?.*$", "wmii")
-    local path = path:gsub("%?", "wmii/?")
+    table.insert(plugin_paths, path)
     if have_posix then
         local stat = posix.stat(wmd)
-        table.insert(plugin_paths, path)
         if stat and stat.type == "directory" then
+            local path = path:gsub("%?", "wmii/?")
             table.insert(plugin_paths, path)
         end
-    else
-        table.insert(plugin_paths, path)
     end
 end
 

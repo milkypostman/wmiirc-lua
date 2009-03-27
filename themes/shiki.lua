@@ -66,8 +66,8 @@ wmii.set_conf ({
 
 
 wmii.set_conf("messages.fg", border_normal)
-wmii.set_conf("messages.bg", bg_normal)
-wmii.set_conf("messages.border", border_normal)
+wmii.set_conf("messages.bg", bg_focus)
+wmii.set_conf("messages.border", bg_focus)
 
 wmii.set_conf("volume.fg_low", "#777777")
 wmii.set_conf("volume.fg_med", "#007700")
@@ -78,15 +78,17 @@ wmii.set_conf("cpufreq.color_performance", table.concat({"#990000", bg_normal, b
 
 wmii.set_conf("clock.fg_time", fg_focus)
 
-
 wmii.set_conf("400_cpu.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
 
 wmii.set_conf("301_mpd_status.colors", table.concat({bg_focus, bg_normal, bg_normal}, ' '))
 
---wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
---wmii.set_conf("zzz105_client_mode.colors", table.concat({fg_normal, bg_normal, bg_normal}, ' '))
+wmii.set_conf("zzz999_client.colors", table.concat({fg_focus, bg_focus, bg_focus}, ' '))
+
+wmii.set_conf("100_client_mode.colors", table.concat({fg_normal, bg_focus, bg_focus}, ' '))
+wmii.set_conf("zzz888_client_mode.colors", table.concat({fg_normal, bg_focus, bg_focus}, ' '))
 
 --wmii.set_conf("volume.border_color", bg_normal)
 
-wmii.set_conf("loadavg.bg", bg_normal)
+--wmii.set_conf("loadavg.bg", bg_normal)
+--wmii.set_conf("loadavg.border", "#ffffff")
 

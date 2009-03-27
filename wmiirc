@@ -71,6 +71,7 @@ local theme = os.getenv("HOME").."/.wmii-hg/themes/dwm.lua"
 if hostname then
     if hostname:find("uiowa") then
         term = "gnome-terminal"
+        theme = os.getenv("HOME").."/.wmii-hg/themes/shiki.lua"
     end
     if hostname:find("murdock") then
         theme = os.getenv("HOME").."/.wmii-hg/themes/shiki.lua"
@@ -196,10 +197,7 @@ if hostname then
         local wmii_client_focused = wmii.client_focused
         local function client_focused(xid)
             local name = wmii.read("/client/"..xid.."/label")
-            local fg_normal = wmii.get_conf("fg_focus")
-            local bg_normal = wmii.get_conf("bg_focus")
-            local border_normal = wmii.get_conf("border_focus")
-            client_name:show(name, table.concat({fg_normal, bg_normal, bg_normal},' '))
+            client_name:show(name)
             return wmii_client_focused(xid)
         end
         wmii.client_focused = client_focused

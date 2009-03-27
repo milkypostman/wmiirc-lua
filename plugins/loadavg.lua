@@ -48,17 +48,12 @@ local function loadavg_timer (time_since_update)
 			local current_avg = tonumber(one)
 			if type(current_avg) == "number" then
 				local index  = math.min(math.floor(current_avg * (#palette-1)) + 1, #palette)
-                local bg = wmii.get_conf("loadavg.bg")
-                if bg then
-                    local border = wmii.get_conf("loadavg.bg")
-                    if not border then
-                        border = bg
-                    end
-                    colors = table.concat({palette[index], bg, bg}, ' ')
-                else
-                    local normal = wmii.get_ctl("normcolors")
-                    colors = string.gsub(normal, "^%S+", palette[index], 1)
-                end
+                local normcolors = wmii.get_ctl("normcolors")
+                local bg, border = normcolors:match("#%x+%s+(#%x+)%s+(#%x+)")
+                bg = wmii.get_conf("loadavg.bg") or bg
+                border = wmii.get_conf("loadavg.border") or border
+
+                colors = table.concat({palette[index], bg, border}, ' ')
 			end
 		end
 	end

@@ -151,4 +151,3 @@ local function clock_timer (time_since_update)
 end
 
 local timer = wmii.timer:new (clock_timer, 1)
-
