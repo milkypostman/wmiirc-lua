@@ -1,7 +1,12 @@
+"""
+wmiirc-python :: foolish attempt
+"""
+
 import subprocess
 import time
 import sys
 
+import pyxp
 
 def main():
     process = subprocess.Popen("wmiir read /event", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
