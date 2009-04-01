@@ -2,7 +2,6 @@ import socket
 import sys
 import os
 import logging
-import struct
 import heapq
 import cStringIO
 log = logging.getLogger('py9')
@@ -21,7 +20,6 @@ class Data(object):
 
     def pack(self):
         """ convert to a p9 byte sequence """
-        print 'self.value', self.value
         return self.value
 
     def unpack(self, sock):
@@ -35,26 +33,37 @@ class Data(object):
         return self.value
 
 class Int(Data):
-    _formats = {1:'B', 2:'H', 4:'I', 8:'L'}
     def __init__(self, size=0, value=None):
         super(Int, self).__init__(size, value)
-        self.struct = struct.Struct(self._formats[size])
 
     def pack(self):
-        return self.struct.pack(self.value)
+        val = self.value
+        buffer = []
+        for i in range(self.size):
+            buffer.append(chr(val & 0xff))
+            val >>= 8
+
+        return ''.join(buffer)
 
     def unpack(self, sock):
-        self.value = self.struct.unpack(sock.recv(self.size))[0]
+        data = sock.recv(self.size)
+        val = 0
+        for i in range(self.size):
+            cur = ord(data[i]) << (i * 8)
+            val += cur
+
+        self.value = val
+
 
 class String(Data):
-    struct = struct.Struct('H')
-
+    length = Int(2)
     def pack(self):
-        return self.struct.pack(len(self.value)) + self.value
+        self.length.value = len(self.value)
+        return self.length.pack() + self.value
 
     def unpack(self, sock):
-        length = self.struct.unpack(sock.recv(2))[0]
-        self.value = sock.recv(length)
+        self.length.unpack(sock)
+        self.value = sock.recv(self.length.value)
 
 class Array(Data):
     def __init__(self, size, cls=None, *args):
@@ -117,7 +126,6 @@ class Struct(object):
             except AttributeError:
                 return self.__dict__['_fields'][name]
 
-        print self
         return object.__getattr__(self, name)
 
     def pack(self):
@@ -180,8 +188,6 @@ def unpack(sock):
 
     mtype = Int(1)
     mtype.unpack(sock)
-
-    print mtype.value
 
     msg = Message.types[mtype.value]()
     msg.unpack(sock)
@@ -566,22 +572,14 @@ class Client():
         fid = self._walk(path)
         qid = self._open(fid, 1)
 
-        print 'type;', qid.type
-
         left = len(data)
 
-        t = Tread()
+        t = Twrite()
+        t.tag = 0
         t.fid = fid
         t.offset = 0
         t.count = left
         t.data = data
-        print '^^^',  t.offset
-        print '****', t.count
-        print "------", t.data
-
-        resp = self._message(t)
-        print "***", resp.count
-        return
 
         while left > 0:
             t.count = left & 0xff
