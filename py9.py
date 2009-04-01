@@ -16,8 +16,21 @@ MAX_MSG = 100
 NOFID = 0xFFFF
 
 class Data(object):
+    """
+    P9 Raw Data
+    ================
+
+    Base class for all other P9 datatypes.  By default this class
+    packs/unpacks raw data.
+    """
+
     value = None
     def __init__(self, size=0, value=None):
+        """
+        Initialize a new raw data type of length 'size'.
+
+        Note: size may be a class instance that returns a value for int(size).
+        """
         self.size = size
         self.value = value
         pass
@@ -37,6 +50,12 @@ class Data(object):
         return self.value
 
 class Int(Data):
+    """
+    P9 Integer Data
+    =======================
+    Encodes and decodes integer numbers to an arbitrary length.
+    """
+
     def __init__(self, size=0, value=None):
         super(Int, self).__init__(size, value)
 
@@ -107,6 +126,10 @@ class Array(Data):
             self.value.append(d)
 
 class Struct(object):
+    """
+    Structure to hold multiple base elements such as String/Integer/Data
+    """
+
     def __init__(self, count=0):
         self._fields = {}
         self._fieldset = []
@@ -169,8 +192,6 @@ class Stat(Struct):
         self._field('uid', String())
         self._field('gid', String())
         self._field('muid', String())
-
-
 
 class Message(Struct):
     types = {}
@@ -375,18 +396,40 @@ class Rremove(Message):
     def __init__(self):
         super(Rremove, self).__init__()
 
-    #    Tstat => 124,
-    #    Rstat => 125,
-    #    Twstat => 126,
-    #    Rwstat => 127,
-    #  }.freeze
+@msg(124)
+class Tstat(Message):
+    def __init__(self):
+        super(Tremove, self).__init__()
+        self._field('fid', Int(4))
 
-#size[4] Tstat tag[2] fid[4]                                        
-#size[4] Rstat tag[2] stat[n]                                       
-#
-#size[4] Twstat tag[2] fid[4] stat[n]                               
-#size[4] Rwstat tag[2]
+@msg(125)
+class Rstat(Message):
+    def __init__(self):
+        super(Rremove, self).__init__()
+        self._field('stat', Stat())
+
+@msg(124)
+class Twstat(Message):
+    def __init__(self):
+        super(Tremove, self).__init__()
+        self._field('fid', Int(4))
+        self._field('stat', Stat())
+
+@msg(125)
+class Rwstat(Message):
+    pass
+
 class StringSocket:
+    """
+    Wrapper around the cStringIO.StringIO class providing
+    some added functionality and socket functions.
+
+    Adds the following functions:
+        send : write data do the buffer
+        recv : read data from the buffer
+        eof : see if we have reached the end of the buffer
+    """
+
     def __init__(self):
         self.buffer = cStringIO.StringIO()
         self.length = 0
@@ -400,15 +443,13 @@ class StringSocket:
         if length > self.length:
             self.length = length
 
-    def eof():
+    def eof(self):
         result = False
-        if self.buffer.read() == '':
+        if self.buffer.read(1) == '':
             result = True
-        self.buffer.seek(-1, 1)
+        else:
+            self.buffer.seek(-1, 1)
         return result
-
-    def __len__(self):
-        return self.length
 
     def __getattr__(self, name):
         length = self.buffer.tell()
@@ -485,7 +526,6 @@ class Client():
         tag = self._obtaintag()
 
         msg.tag = tag
-        print tag
 
         with self.recvqueuelock:
             queue = self.recvqueues[tag]
@@ -551,11 +591,10 @@ class Client():
     def ls(self, path):
         """ list a directory """
         buffer = self.read(path)
-        eof = len(buffer)
 
         # do an ls
         files = []
-        while buffer.tell() < eof:
+        while not buffer.eof():
             stat = Stat()
             stat.unpack(buffer)
             files.append( stat.name )
@@ -601,32 +640,35 @@ class Client():
         t = Tread()
         t.fid = fid
         t.count = self.msize
-        while(True):
-            t.offset = 0
-
-            try:
-                r = self._message(t)
-            except IOError:
-                break
-
-            if r.count < 1:
-                yield buffer
-                break
-
-            buffer += r.data
-
-            offset=0
+        readoffset = 0
+        try:
             while(True):
-                l = buffer.find('\n', offset)
+                t.offset = readoffset
 
-                if l < 0:
-                    buffer = buffer[offset:]
+                try:
+                    r = self._message(t)
+                except IOError:
                     break
 
-                yield buffer[offset:l]
-                offset += l+1
+                if r.count < 1:
+                    yield buffer
+                    break
 
-        self._clunk(fid)
+                buffer += r.data
+                readoffset += len(buffer)
+
+                offset=0
+                while(True):
+                    l = buffer.find('\n', offset)
+
+                    if l < 0:
+                        buffer = buffer[offset:]
+                        break
+
+                    yield buffer[offset:l]
+                    offset = l+1
+        finally:
+            self._clunk(fid)
 
     def read(self, path):
         fid = self._walk(path)
