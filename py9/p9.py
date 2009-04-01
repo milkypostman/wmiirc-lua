@@ -266,7 +266,7 @@ class Rerror(Message):
 class Tflush(Message):
     def __init__(self):
         super(Tflush, self).__init__()
-        self._field('oldtag', Int(4))
+        self._field('oldtag', Int(2))
 
 @msg(109)
 class Rflush(Message):
@@ -464,14 +464,28 @@ class Client():
         tag = self._obtaintag()
 
         msg.tag = tag
+        print 'sending',msg
         self.sock.send(msg.pack())
-        resp = unpack(self.sock)
+        resp = None
+        try:
+            resp = unpack(self.sock)
+        except KeyboardInterrupt, e:
+            self._flush(tag)
+            raise KeyboardInterrupt
+
+        self._releasetag(tag)
+
+        print 'recieved', resp
 
         if type(resp) == Rerror:
             raise IOError(str(type(msg)) + " : " + resp.ename)
 
-        self._releasetag(tag)
         return resp
+
+    def _flush(self, oldtag):
+        msg = Tflush()
+        msg.oldtag = oldtag
+        self._message(msg)
 
     def _version(self):
         t = Tversion()
@@ -523,6 +537,8 @@ class Client():
 
         r = self._message(t)
 
+        print r
+
         return t.newfid
 
     def _open(self, fid, mode = 0):
@@ -531,6 +547,8 @@ class Client():
         t.mode = mode
 
         r = self._message(t)
+
+        print r
 
         return r.qid
 
@@ -541,6 +559,45 @@ class Client():
         self._message(t)
 
         self._releasefid(fid)
+
+    def readln_iter(self, path):
+        fid = self._walk(path)
+        qid = self._open(fid)
+
+        buffer = ''
+
+        t = Tread()
+        t.fid = fid
+        t.count = self.msize
+        while(True):
+            t.offset = 0
+
+            try:
+                r = self._message(t)
+            except IOError:
+                # FIXME: This is a hack.
+                # Should make this threaded.
+                unpack(self.sock)
+                break
+
+            if r.count < 1:
+                yield buffer
+                break
+
+            buffer += r.data
+
+            offset=0
+            while(True):
+                l = buffer.find('\n', offset)
+
+                if l < 0:
+                    buffer = buffer[offset:]
+                    break
+
+                yield buffer[offset:l]
+                offset += l+1
+
+        self._clunk(fid)
 
     def read(self, path):
         fid = self._walk(path)
