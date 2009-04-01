@@ -3,7 +3,11 @@ import sys
 import os
 import logging
 import heapq
+import thread
 import cStringIO
+import time
+from collections import defaultdict
+import Queue
 log = logging.getLogger('py9')
 
 VERSION = '9P2000'
@@ -181,18 +185,19 @@ class Message(Struct):
         size.value = 4 + 1 + len(data)
         return ''.join([size.pack(), self.type.pack(), data])
 
-def unpack(sock):
-    """ use the socket to unpack data """
-    size = Int(4)
-    size.unpack(sock)
+    @classmethod
+    def new(cls, sock):
+        """ use the socket to unpack data """
+        size = Int(4)
+        size.unpack(sock)
 
-    mtype = Int(1)
-    mtype.unpack(sock)
+        mtype = Int(1)
+        mtype.unpack(sock)
 
-    msg = Message.types[mtype.value]()
-    msg.unpack(sock)
+        msg = Message.types[mtype.value]()
+        msg.unpack(sock)
 
-    return msg
+        return msg
 
 def msg(num):
     """ simple decorator that counts our messages """
@@ -415,11 +420,15 @@ class StringSocket:
         return self.buffer.getvalue()
 
 class Client():
+    recvqueues = defaultdict(Queue.Queue)
+
     def __init__(self, addr):
         self._tagheap = range(1, 0xff)
         heapq.heapify(self._tagheap)
         self._fidheap = range(0xff, 0xffff)
         heapq.heapify(self._fidheap)
+
+        self.recvqueuelock = thread.allocate_lock()
 
         sock_path = addr.split('!')
         try:
@@ -437,8 +446,11 @@ class Client():
 
         self.sock = sock
 
+        self.recvthread = thread.start_new_thread(self._recv, tuple())
+
         version = self._version()
-        print version
+
+        log.debug("connected to server (version %s)" % version)
 
         if version != VERSION:
             raise Exception("9P Version Mismatch")
@@ -446,6 +458,15 @@ class Client():
         self.rootfid = 0
 
         self._attach(self.rootfid)
+
+        log.debug("succesfully attached")
+
+    def _recv(self):
+        while True:
+            msg = Message.new(self.sock)
+            with self.recvqueuelock:
+                queue = self.recvqueues[msg.tag]
+            queue.put(msg)
 
 
     def _obtainfid(self):
@@ -464,25 +485,41 @@ class Client():
         tag = self._obtaintag()
 
         msg.tag = tag
-        print 'sending',msg
+        print tag
+
+        with self.recvqueuelock:
+            queue = self.recvqueues[tag]
+
+        logging.debug("sending %s" % msg.__class__)
+
         self.sock.send(msg.pack())
-        resp = None
+
         try:
-            resp = unpack(self.sock)
-        except KeyboardInterrupt, e:
+            resp = queue.get()
+            #while resp is None:
+            #    try:
+            #        resp = queue.get_nowait()
+            #    except Queue.Empty:
+            #        time.sleep(.1)
+            #print 'flushing'
+            #print 'done flushing'
+            #resp = queue.get()
+        except KeyboardInterrupt:
             self._flush(tag)
+            self._releasetag(tag)
+            resp = queue.get()
             raise KeyboardInterrupt
 
         self._releasetag(tag)
+        logging.debug("recieving %s" % msg.__class__)
 
-        print 'recieved', resp
-
-        if type(resp) == Rerror:
+        if type(resp) == Rerror  and type(msg) != Tflush:
             raise IOError(str(type(msg)) + " : " + resp.ename)
 
         return resp
 
     def _flush(self, oldtag):
+        print "_flush", oldtag
         msg = Tflush()
         msg.oldtag = oldtag
         self._message(msg)
@@ -527,7 +564,6 @@ class Client():
 
     def _walk(self, path):
         t = Twalk()
-        t.tag = self._obtaintag()
 
         t.fid = self.rootfid
         t.newfid = self._obtainfid()
@@ -537,8 +573,6 @@ class Client():
 
         r = self._message(t)
 
-        print r
-
         return t.newfid
 
     def _open(self, fid, mode = 0):
@@ -547,8 +581,6 @@ class Client():
         t.mode = mode
 
         r = self._message(t)
-
-        print r
 
         return r.qid
 
@@ -575,9 +607,6 @@ class Client():
             try:
                 r = self._message(t)
             except IOError:
-                # FIXME: This is a hack.
-                # Should make this threaded.
-                unpack(self.sock)
                 break
 
             if r.count < 1:

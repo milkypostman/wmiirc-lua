@@ -1,4 +1,4 @@
-import p9
-reload(p9)
+import py9
+reload(py9)
 
-c = p9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
+c = py9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
