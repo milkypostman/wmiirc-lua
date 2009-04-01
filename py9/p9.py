@@ -1,65 +1,420 @@
-#
-# Copyright (C) 2009 Donald Ephraim Curtis <dcurtis@cs.uiowa.edu>
-# Copyright (C) 2007 Rico Schiekel (fire at downgra dot de)
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-#
-# vim:syntax=python:sw=4:ts=4:expandtab
-
+import socket
+import sys
 import os
 import logging
-import socket
-import thread
-import sys
-import cmd
-from error import *
+import struct
+import heapq
+import cStringIO
+log = logging.getLogger('py9')
 
-version = "9P2000"
-nofid = 0xffffffffL
-notag = 0xffff
+VERSION = '9P2000'
+MSIZE = 8192 # magic number defined in Plan9 for [TR]version and [TR]read
+MAX_MSG = 100
+NOFID = 0xFFFF
 
-DIR = 020000000000L
-QDIR = 0x80
-OREAD, OWRITE, ORDWR, OEXEC = range(4)
-OTRUNC, ORCLOSE = 0x10, 0x40
+class Data(object):
+    value = None
+    def __init__(self, size=0, value=None):
+        self.size = size
+        self.value = value
+        pass
 
-PORT = 564
+    def pack(self):
+        """ convert to a p9 byte sequence """
+        pass
 
-def lock(func):
-    def wrapper(self, *args, **kwargs):
-        self.lock.acquire()
-        ret = None
-        try:
-            ret = func(self, self.counter, *args, **kwargs)
-        except Exception, e:
-            logging.exception(e)
+    def unpack(self, sock):
+        """ get data from a socket """
+        l = int(self.size)
+        if l > 0:
+            self.value = sock.recv(l)
+        pass
+
+    def __int__(self):
+        return self.value
+
+class Int(Data):
+    _formats = {1:'B', 2:'H', 4:'I', 8:'L'}
+    def __init__(self, size=0, value=None):
+        super(Int, self).__init__(size, value)
+        self.struct = struct.Struct(self._formats[size])
+
+    def pack(self):
+        return self.struct.pack(self.value)
+
+    def unpack(self, sock):
+        self.value = self.struct.unpack(sock.recv(self.size))[0]
+
+class String(Data):
+    struct = struct.Struct('H')
+
+    def pack(self):
+        return self.struct.pack(len(self.value)) + self.value
+
+    def unpack(self, sock):
+        length = self.struct.unpack(sock.recv(2))[0]
+        self.value = sock.recv(length)
+
+class Array(Data):
+    def __init__(self, size, cls=None, *args):
+        super(Array, self).__init__(size, [])
+        self.cls = cls
+        self.clsargs = args
+
+    def __setattr__(self, name, values):
+        if name == 'value' and (type(values) == list):
+            self.__dict__['value'] = []
+            for v in values:
+                item = self.cls()
+                item.value = v
+                self.__dict__['value'].append(item)
+
+        else:
+            object.__setattr__(self, name, values)
+
+
+    def pack(self):
+        size = int(self.size)
+        if size != len(self.value):
+            raise Exception("Not enough items recieved for array")
+
+        buffer = []
+        for value in self.value:
+            buffer.append(value.pack())
+
+        return ''.join(buffer)
+
+    def unpack(self, sock):
+        self.value = []
+
+        for i in range(int(self.size)):
+            d = self.cls(*self.clsargs)
+            d.unpack(sock)
+            self.value.append(d)
+
+class Struct(object):
+    def __init__(self, count=0):
+        self._fields = {}
+        self._fieldset = []
+
+    def _field(self, name, type):
+        self._fields[name] = type
+        self._fieldset.append( type )
+        return type
+
+    def __setattr__(self, name, value):
+        fields = self.__dict__.get('_fields', False)
+        if fields and name in fields:
+            fields[name].value = value
+        else:
+            object.__setattr__(self, name, value)
+
+    def __getattr__(self, name):
+        if name in self.__dict__['_fields']:
             try:
-                _close(self.counter)
-            except:
-                pass
-        self.counter += 1
-        self.lock.release()
-        return ret
-    return wrapper
+                return self.__dict__['_fields'][name].value
+            except AttributeError:
+                return self.__dict__['_fields'][name]
 
-class Client(object):
-    ROOT = 23
-    verbose = 1
-    def __init__(self, path):
-        #sock_path = os.environ.get('WMII_ADDRESS', '').split('!')
-        sock_path = path.split('!')
+        print self
+        return object.__getattr__(self, name)
+
+    def pack(self):
+        buffer = []
+        for field in self._fieldset:
+            buffer.append(field.pack())
+
+        return ''.join(buffer)
+
+    def unpack(self, sock):
+        for field in self._fieldset:
+            field.unpack(sock)
+
+class Qid(Struct):
+    def __init__(self, count=0):
+        super(Qid, self).__init__()
+        self._field('type', Int(1))
+        self._field('version', Int(4))
+        self._field('path', Int(8))
+
+class Stat(Struct):
+    def __init__(self):
+        super(Stat, self).__init__()
+        self._field('size', Int(2))
+        self._field('type', Int(2))
+        self._field('dev', Int(4))
+
+        self._field('qid', Qid())
+
+        self._field('mode', Int(4))
+        self._field('atime', Int(4))
+        self._field('mtime', Int(4))
+
+        self._field('length', Int(8))
+
+        self._field('name', String())
+        self._field('uid', String())
+        self._field('gid', String())
+        self._field('muid', String())
+
+
+
+class Message(Struct):
+    types = {}
+
+    def __init__(self):
+        super(Message, self).__init__()
+        self._field('tag', Int(2))
+
+    def pack(self):
+        data = super(Message, self).pack()
+        size = Int(4)
+        size.value = 4 + 1 + len(data)
+        return ''.join([size.pack(), self.type.pack(), data])
+
+def unpack(sock):
+    """ use the socket to unpack data """
+    size = Int(4)
+    size.unpack(sock)
+
+    mtype = Int(1)
+    mtype.unpack(sock)
+
+    print mtype.value
+
+    msg = Message.types[mtype.value]()
+    msg.unpack(sock)
+
+    return msg
+
+def msg(num):
+    """ simple decorator that counts our messages """
+    global MAX_MSG
+    if num > MAX_MSG:
+        MAX_MSG = num+1
+
+    def _msg(cls):
+        cls.type = Int(1, num)
+        Message.types[num] = cls
+        return cls
+
+    return _msg
+
+
+@msg(100)
+class Tversion(Message):
+    def __init__(self):
+        super(Tversion, self).__init__()
+        self._field('msize', Int(4))
+        self._field('version', String())
+
+@msg(101)
+class Rversion(Message):
+    def __init__(self):
+        super(Rversion, self).__init__()
+        self._field('msize', Int(4))
+        self._field('version', String())
+
+@msg(102)
+class Tauth(Message):
+    def __init__(self):
+        super(Tauth, self).__init__()
+        self._field('afid', Int(4))
+        self._field('uname', String())
+        self._field('aname', String())
+
+@msg(103)
+class Rauth(Message):
+    def __init__(self):
+        super(Rauth, self).__init__()
+        self._field('aqid', Qid())
+
+@msg(104)
+class Tattach(Message):
+    def __init__(self):
+        super(Tattach, self).__init__()
+        self._field('fid', Int(4))
+        self._field('afid', Int(4))
+        self._field('uname', String())
+        self._field('aname', String())
+
+@msg(105)
+class Rattach(Message):
+    def __init__(self):
+        super(Rattach, self).__init__()
+        self._field('qid', Qid())
+
+@msg(106)
+class Terror(Message):
+    def __init__(self):
+        raise Exception("Terror is an invalid message")
+
+@msg(107)
+class Rerror(Message):
+    def __init__(self):
+        super(Rerror, self).__init__()
+        self._field('ename', String())
+
+@msg(108)
+class Tflush(Message):
+    def __init__(self):
+        super(Tflush, self).__init__()
+        self._field('oldtag', Int(4))
+
+@msg(109)
+class Rflush(Message):
+    pass
+
+@msg(110)
+class Twalk(Message):
+    def __init__(self):
+        super(Twalk, self).__init__()
+        self._field('fid', Int(4))
+        self._field('newfid', Int(4))
+        n = self._field('nwname', Int(2))
+        self._field('wname', Array(n, String))
+
+@msg(111)
+class Rwalk(Message):
+    def __init__(self):
+        super(Rwalk, self).__init__()
+        n = self._field('nwqid', Int(2))
+        self._field('wqid', Array(n, Qid))
+
+@msg(112)
+class Topen(Message):
+    def __init__(self):
+        super(Topen, self).__init__()
+        self._field('fid', Int(4))
+        self._field('mode', Int(1))
+
+@msg(113)
+class Ropen(Message):
+    def __init__(self):
+        super(Ropen, self).__init__()
+        self._field('qid', Qid())
+        self._field('iounit', Int(4))
+
+@msg(114)
+class Tcreate(Message):
+    def __init__(self):
+        super(Tcreate, self).__init__()
+        self._field('fid', Int(4))
+        self._field('name', String())
+        self._field('perm', Int(4))
+        self._field('mode', Int(1))
+
+@msg(115)
+class Rcreate(Message):
+    def __init__(self):
+        super(Rcreate, self).__init__()
+        self._field('qid', Qid())
+        self._field('iounit', Int(4))
+
+@msg(116)
+class Tread(Message):
+    def __init__(self):
+        super(Tread, self).__init__()
+        self._field('fid', Int(4))
+        self._field('offset', Int(8))
+        self._field('count', Int(4))
+
+@msg(117)
+class Rread(Message):
+    def __init__(self):
+        super(Rread, self).__init__()
+        c = self._field('count', Int(4))
+        self._field('data', Data(c))
+
+@msg(118)
+class Twrite(Message):
+    def __init__(self):
+        super(Twrite, self).__init__()
+        self._field('fid', Int(4))
+        self._field('offset', Int(8))
+        c = self._field('count', Int(4))
+        self._field('data', Raw(c))
+
+@msg(119)
+class Rwrite(Message):
+    def __init__(self):
+        super(Rwrite, self).__init__()
+        c = self._field('count', Int(4))
+
+@msg(120)
+class Tclunk(Message):
+    def __init__(self):
+        super(Tclunk, self).__init__()
+        self._field('fid', Int(4))
+
+@msg(121)
+class Rclunk(Message):
+    def __init__(self):
+        super(Rclunk, self).__init__()
+
+@msg(122)
+class Tremove(Message):
+    def __init__(self):
+        super(Tremove, self).__init__()
+        self._field('fid', Int(4))
+
+@msg(123)
+class Rremove(Message):
+    def __init__(self):
+        super(Rremove, self).__init__()
+
+    #    Tstat => 124,
+    #    Rstat => 125,
+    #    Twstat => 126,
+    #    Rwstat => 127,
+    #  }.freeze
+
+#size[4] Tstat tag[2] fid[4]                                        
+#size[4] Rstat tag[2] stat[n]                                       
+#
+#size[4] Twstat tag[2] fid[4] stat[n]                               
+#size[4] Rwstat tag[2]
+class StringSocket:
+    def __init__(self):
+        self.buffer = cStringIO.StringIO()
+        self.length = 0
+
+    def recv(self, size):
+        return self.buffer.read(size)
+
+    def send(self, data):
+        self.buffer.write(data)
+        length = self.buffer.tell()
+        if length > self.length:
+            self.length = length
+
+    def eof():
+        result = False
+        if self.buffer.read() == '':
+            result = True
+        self.buffer.seek(-1, 1)
+        return result
+
+    def __len__(self):
+        return self.length
+
+    def __getattr__(self, name):
+        length = self.buffer.tell()
+        if length > self.length:
+            self.length = length
+        return getattr(self.buffer, name)
+
+    def __repr__(self):
+        return self.buffer.getvalue()
+
+class Client():
+    def __init__(self, addr):
+        self._tagheap = range(1, 0xff)
+        heapq.heapify(self._tagheap)
+        self._fidheap = range(0xff, 0xffff)
+        heapq.heapify(self._fidheap)
+
+        sock_path = addr.split('!')
         try:
             if sock_path[0] == 'unix':
                 sock = socket.socket(socket.AF_UNIX)
@@ -70,226 +425,164 @@ class Client(object):
             else:
                 return
         except socket.error, e:
-            logging.exception(e)
+            log.exception(e)
             sys.exit(-1)
 
-        self.sock = cmd.Marshal9P(sock)
+        self.sock = sock
 
-        maxbuf, vers = self._version(16 * 1024, version)
-        if vers != version:
-            raise Error('version mismatch: %r' % vers)
+        version = self._version()
+        print version
 
-        self._attach(self.ROOT, nofid, '', '')
-        self.connected = True
-        self.counter = 42
-        self.lock = thread.allocate_lock()
+        if version != VERSION:
+            raise Exception("9P Version Mismatch")
 
-    def _rpc(self, type, *args):
-        tag = 1
-        if type == cmd.Tversion:
-            tag = notag
-        if self.verbose:
-            print cmd.repr(type), repr(args)
-        self.sock.send(type, tag, *args)
-        rtype, rtag, vals = self.sock.recv()
-        if self.verbose:
-            print cmd.repr(rtype), repr(vals)
-        if rtag != tag:
-            raise Error("invalid tag received")
-        if rtype == cmd.Rerror:
-            raise P9Error(vals)
-        if rtype != type + 1:
-            raise Error("incorrect reply from server: %r" % [rtype, rtag, vals])
-        return vals
+        self.rootfid = 0
 
-    def _version(self, msize, version):
-        return self._rpc(cmd.Tversion, msize, version)
+        self._attach(self.rootfid)
 
-    def _attach(self, fid, afid, uname, aname):
-        return self._rpc(cmd.Tattach, fid, afid, uname, aname)
 
-    def _stat(self, fid):
-        return self._rpc(cmd.Tstat, fid)
+    def _obtainfid(self):
+        return heapq.heappop(self._fidheap)
 
-    def _wstat(self, fid, stats):
-        return self._rpc(cmd.Twstat, fid, stats)
+    def _releasefid(self, fid):
+        heapq.heappush(self._fidheap, fid)
 
-    def _walk(self, fd, path):
-        pstr = path
-        root = self.ROOT
+    def _obtaintag(self):
+        return heapq.heappop(self._tagheap)
+
+    def _releasetag(self, tag):
+        heapq.heappush(self._tagheap, tag)
+
+    def _message(self, msg):
+        tag = self._obtaintag()
+
+        msg.tag = tag
+        self.sock.send(msg.pack())
+        resp = unpack(self.sock)
+
+        if type(resp) == Rerror:
+            raise IOError(str(type(msg)) + " : " + resp.ename)
+
+        self._releasetag(tag)
+        return resp
+
+    def _version(self):
+        t = Tversion()
+
+        t.msize = MSIZE
+        t.version = VERSION
+
+        r = self._message(t)
+        self.msize = r.msize
+
+        return r.version
+
+    def _attach(self, fid = None):
+        t = Tattach()
+        if fid == None:
+            fid = self._obtainfid()
+        t.fid = fid
+        t.afid = NOFID
+        t.uname = os.getenv('USER')
+        t.aname = os.getenv('USER')
+
+        r = self._message(t)
+
+        return t.fid
+
+    def ls(self, path):
+        """ list a directory """
+        buffer = self.read(path)
+        eof = len(buffer)
+
+        # do an ls
+        files = []
+        while buffer.tell() < eof:
+            stat = Stat()
+            stat.unpack(buffer)
+            files.append( stat.name )
+
+        return files
+
+    def _walk(self, path):
+        t = Twalk()
+        t.tag = self._obtaintag()
+
+        t.fid = self.rootfid
+        t.newfid = self._obtainfid()
         path = filter(None, path.split('/'))
-        try:
-            w = self._rpc(cmd.Twalk, (root, fd, path))
-        except P9Error, e:
-            raise P9Exception('_walk: %s: %s' % (pstr, e.args[0]))
+        t.nwname = len(path)
+        t.wname = path
 
-        if len(w) < len(path):
-            raise P9Exception('_walk: %s: not found' % pstr)
-        return w
+        r = self._message(t)
 
-    def _open(self, fd, mode = 0):
-        try:
-            t =  self._rpc(cmd.Topen, fd, mode)
-            if not t:
-                raise P9Exception('_open: failed to open')
-        except P9Error, e:
-            raise P9Exception('_open: %s' % e.args[0])
-        return t
+        return t.newfid
 
-    def _close(self, fd):
-        try:
-            self._rpc(cmd.Tclunk, fd)
-        except P9Error, e:
-            raise P9Exception('_close: %s' % e.args[0])
+    def _open(self, fid, mode = 0):
+        t = Topen()
+        t.fid = fid
+        t.mode = mode
 
-    def _read(self, fd, length):
-        try:
-            pos = 0L
-            buf =  self._rpc(cmd.Tread, fd, pos, length)
-            while len(buf) > 0:
-                pos += len(buf)
-                yield buf
-                buf = self._rpc(cmd.Tread, fd, pos, length)
-        except P9Error, e:
-            raise P9Exception('_read: %s' % e.args[0])
+        r = self._message(t)
 
-    def _write(self, fd, buf):
-        try:
-            towrite = len(buf)
-            pos = 0
-            while pos < towrite:
-                pos += self._rpc(cmd.Twrite, fd, pos, buf[pos:pos + 1024])
-        except P9Error, e:
-            raise P9Exception('_write: %s' % e.args[0])
+        return r.qid
 
-    def _create(self, fd, name, mode = 1, perm = 0644):
-        try:
-            return self._rpc(cmd.Tcreate, fd, name, perm, mode)
-        except P9Error, e:
-            self._close()
-            raise P9Exception('_create: %s' % e.args[0])
+    def _clunk(self, fid):
+        t = Tclunk()
+        t.fid = fid
 
-    def _remove(self, fd):
-        try:
-            return self._rpc(cmd.Tremove, fd)
-        except P9Error, e:
-            raise P9Exception('_remove: %s' % e.args[0])
+        self._message(t)
 
-    @lock
-    def write(self, fd, file, value):
-        if type(value) not in (type([]), type(()), type(set())):
-            value = [value]
-        try:
-            # TODO: walk on non existent files fail. needed?
-            self._walk(fd, file)
-        except:
-            pass
-        self._open(fd, mode = OWRITE|OTRUNC)
-        self._write(fd, '\n'.join(value) + '\n')
-        self._close(fd)
+        self._releasefid(fid)
 
-    @lock
-    def read(self, fd, file):
-        ret = ''
-        self._walk(fd, file)
-        self._open(fd)
-        for buf in self._read(fd, 4096):
-            ret += buf
-        ret = ret.split('\n')
-        self._close(fd)
-        return ret
+    def read(self, path):
+        fid = self._walk(path)
+        qid = self._open(fid)
 
-    @lock
-    def create(self, fd, file, value = None):
-        if type(value) not in (type([]), type(()), type(set())):
-            value = [value]
-        plist = file.split('/')
-        path, name = '/'.join(plist[:-1]), plist[-1]
-        self._walk(fd, path)
-        self._create(fd, name)
-        self._write(fd, '\n'.join(value))
-        self._close(fd)
+        offset = 0
+        buffer = StringSocket()
+        t = Tread()
+        t.fid = fid
+        t.count = self.msize
+        while(True):
+            t.offset = offset
 
-    @lock
-    def remove(self, fd, path):
-        self._walk(fd, path)
-        self._open(fd)
-        self._remove(fd)
+            r = self._message(t)
 
-    @lock
-    def ls(self, fd, path):
-        ret = []
-        self._walk(fd, path)
-        self._open(fd)
-        for buf in self._read(fd, 4096):
-            p9 = self.sock
-            p9.setBuf(buf)
-            for sz, t, d, q, m, at, mt, l, name, u, g, mod in p9._decStat(0):
-                if m & DIR:
-                    name += '/'
-                ret.append(name)
-        self._close(fd)
-        return ret
-
-    @lock
-    def process(self, fd, file, func, *args, **kwargs):
-        self._walk(fd, file)
-        self._open(fd)
-        obuf = ''
-        cont = True
-        for buf in self._read(fd, 4096):
-            buf = obuf + buf
-            lnl = buf.rfind('\n')
-            for line in buf[0:lnl].split('\n'):
-                if not func(line.strip(), *args, **kwargs):
-                    cont = False
-                    break
-            if not cont:
+            if r.count < 1:
                 break
-            obuf = buf[lnl + 1:]
-        self._close(fd)
 
-class Server(object):
-    """
-    A server interface to the protocol.
-    Subclass this to provide service
-    """
-    verbose = 0
+            buffer.write(r.data)
+            offset += r.count
 
-    def __init__(self, fd):
-        self.msg = Marshal9P(fd)
+        buffer.reset()
 
-    def _err(self, tag, msg):
-        print 'Error', msg        # XXX
-        if self.verbose:
-            print cmd.repr(cmd.Rerror), repr(msg)
-        self.msg.send(cmd.Rerror, tag, msg)
+        self._clunk(fid)
 
-    def rpc(self):
-        """
-        Process a single RPC message.
-        Return -1 on error.
-        """
-        type, tag, vals = self.msg.recv()
+        return buffer
 
-        name = "_srv" + cmd.repr(type)
-        if self.verbose:
-            print cmd.repr(type), repr(vals)
-        if hasattr(self, name):
-            func = getattr(self, name)
-            try:
-                rvals = func(type, tag, vals)
-            except ServError, e:
-                self._err(tag, e.args[0])
-                return 1                    # nonfatal
-            if self.verbose:
-                print cmd.repr(type+1), repr(rvals)
-            self.msg.send(type + 1, tag, *rvals)
-        else:
-            return self._err(tag, "Unhandled message: %s" % cmd.repr(type))
-        return 1
+    def write(self, path, data):
+        fid = self._walk(path)
+        qid = self._open(fid, 2)
 
-    def serve(self):
-        while self.rpc():
-            pass
+        left = len(data)
+
+        t = Tread()
+        t.fid = fid
+        t.offset = 0
+        while left > 0:
+            t.count = left & 0xff
+            t.data = data[t.offset:t.count]
+
+            resp = self._message(t)
+
+            sent = resp.count
+            t.offset += sent
+            left -= sent
+
+        self._clunk(fid)
+
+
+
+
 
