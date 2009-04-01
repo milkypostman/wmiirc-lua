@@ -21,7 +21,8 @@ class Data(object):
 
     def pack(self):
         """ convert to a p9 byte sequence """
-        pass
+        print 'self.value', self.value
+        return self.value
 
     def unpack(self, sock):
         """ get data from a socket """
@@ -333,7 +334,7 @@ class Twrite(Message):
         self._field('fid', Int(4))
         self._field('offset', Int(8))
         c = self._field('count', Int(4))
-        self._field('data', Raw(c))
+        self._field('data', Data(c))
 
 @msg(119)
 class Rwrite(Message):
@@ -563,13 +564,25 @@ class Client():
 
     def write(self, path, data):
         fid = self._walk(path)
-        qid = self._open(fid, 2)
+        qid = self._open(fid, 1)
+
+        print 'type;', qid.type
 
         left = len(data)
 
         t = Tread()
         t.fid = fid
         t.offset = 0
+        t.count = left
+        t.data = data
+        print '^^^',  t.offset
+        print '****', t.count
+        print "------", t.data
+
+        resp = self._message(t)
+        print "***", resp.count
+        return
+
         while left > 0:
             t.count = left & 0xff
             t.data = data[t.offset:t.count]
