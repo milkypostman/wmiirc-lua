@@ -8,21 +8,12 @@ import cStringIO
 import time
 import collections
 import Queue
-import copy
 log = logging.getLogger('py9')
 
 VERSION = '9P2000'
 MSIZE = 8192 # magic number defined in Plan9 for [TR]version and [TR]read
 MAX_MSG = 100
 NOFID = 0xFFFF
-
-class MessageData(dict):
-    def __getattr__(self, name):
-        return self[name]
-
-    def __setattr__(self, name, value):
-        self[name] = value
-
 
 class Data(object):
     """
@@ -33,7 +24,8 @@ class Data(object):
     packs/unpacks raw data.
     """
 
-    def __init__(self, size=0):
+    data = None
+    def __init__(self, size=0, data=0):
         """
         Initialize a new raw data type of length 'size'.
 
@@ -43,15 +35,19 @@ class Data(object):
         if callable(size):
             self.size = size
 
-    def pack(self, data, ctx=None):
-        """ convert to a p9 byte sequence """
-        return data
+        self.data = data
 
-    def unpack(self, sock, ctx=None, new=False):
+    def pack(self, ctx=None):
+        """ convert to a p9 byte sequence """
+        return self.data
+
+    def unpack(self, sock, ctx=None):
         """ get data from a socket """
         l = self.size(ctx)
         if l > 0:
-            return sock.recv(l)
+            self.data = sock.recv(l)
+
+        return self.data
 
 class Int(Data):
     """
@@ -60,11 +56,12 @@ class Int(Data):
     Encodes and decodes integer numbers to an arbitrary length.
     """
 
-    def __init__(self, size=0):
-        super(Int, self).__init__(size)
+    def __init__(self, size=0, data=0):
+        super(Int, self).__init__(size, data)
 
-    def pack(self, data, ctx=None):
+    def pack(self, ctx=None):
         size = self.size(ctx)
+        data = self.data
 
         buffer = []
         for i in range(size):
@@ -73,7 +70,7 @@ class Int(Data):
 
         return ''.join(buffer)
 
-    def unpack(self, sock, ctx=None, new=False):
+    def unpack(self, sock, ctx=None):
         size = self.size(ctx)
         rawdata = sock.recv(size)
         data = 0
@@ -81,128 +78,162 @@ class Int(Data):
             cur = ord(rawdata[i]) << (i * 8)
             data += cur
 
+        self.data = data
         return data
 
 class String(Data):
     length = Int(2)
-    def pack(self, data, ctx=None):
-        length = self.length.pack(len(data))
-        return length + data
+    def pack(self, ctx=None):
+        self.length.data = len(self.data)
+        return self.length.pack() + self.data
 
-    def unpack(self, sock, ctx=None, new=False):
+    def unpack(self, sock, ctx=None):
         length = self.length.unpack(sock)
-        return sock.recv(length)
+        self.data = sock.recv(length)
+        return self.data
 
-class Array(Data, list):
-    def __init__(self, size, handler=None):
+class Array(Data):
+    def __init__(self, size, cls=None):
         super(Array, self).__init__(size)
-        self.handler = handler
+        self.cls = cls
+        self._data = []
 
-    def pack(self, data=None, ctx=None):
-        if data == None:
-            data = self
+    def _get(self):
+        return self._data
+
+    def _set(self, value):
+        if (not isinstance(value, list)) and (not isinstance(value, tuple)):
+            return
+
+        self._data = []
+        for v in value:
+            h = self.cls()
+            h.data = v
+            self._data.append(h)
+
+    data = property(fget=_get, fset=_set)
+
+    def pack(self, ctx=None):
         size = self.size(ctx)
 
-        if size != len(data):
+        if size != len(self._data):
             raise Exception("Error in Array")
 
         buffer = []
-        for item in data:
-            buffer.append(self.handler.pack(item, buffer))
+        for data in self.data:
+            buffer.append(data.pack(self._data))
 
         return ''.join(buffer)
 
 
-    def unpack(self, sock, ctx=None, new=False):
+    def unpack(self, sock, ctx=None):
         size = self.size(ctx)
 
-        if new:
-            data = []
-        else:
-            data = self
-
+        data = []
         for i in range(size):
-            data.append(self.handler.unpack(sock, data, True))
+            h = self.cls()
+            h.unpack(sock, data)
+            data.append(h)
+
+        self._data = data
 
         return data
 
+def _property(name):
+    def get(self):
+        try:
+            return self._fdict[name].data
+        except AttributeError:
+            return self._fdict[name]
 
-class Struct(dict):
+    def set(self, data):
+        try:
+            self._fdict[name].data = data
+        except AttributeError:
+            self._fdict[name] = data
+
+    return property(fget=get, fset=set)
+
+
+class _MetaStruct(type):
+    def __init__(cls, name, bases, dict):
+        super(_MetaStruct, cls).__init__(name, bases, dict)
+
+        for field in cls._fields:
+            setattr(cls, field[0], _property(field[0]))
+
+class Struct(object):
     """
     Structure to hold multiple base elements such as String/Integer/Data
     """
 
     _fields = []
 
+    __metaclass__ = _MetaStruct
+
     def __init__(self, sock=None, *args, **kwargs):
         super(Struct, self).__init__()
-
         self._fdict = {}
-        for name, handler in self._fields:
+        self._flist = []
+        for field in self._fields:
+            name = field[0]
+            cls = field[1]
+            if len(field) > 2:
+                args = field[2]
+                if isinstance(args, tuple) or isinstance(args, list):
+                    handler = cls(*args)
+                else:
+                    handler = cls(args)
+            else:
+                handler = cls()
+
             self._fdict[name] = handler
+            self._flist.append(handler)
 
         if sock is not None:
             self.unpack(sock)
-        else:
-            for name in kwargs:
-                self[name] = kwargs[name]
 
-    def pack(self, data=None, ctx=None):
-        if data == None:
-            data = self
-
+    def pack(self, ctx=None):
         buffer = []
-        for name,handler in self._fields:
-            buffer.append(self._fdict[name].pack(data[name], self))
+        for handler in self._flist:
+            buffer.append(handler.pack(self))
 
         return ''.join(buffer)
 
-    def unpack(self, sock, ctx=None, new=False):
-        if new:
-            data = self.__class__()
-        else:
-            data = self
+    def unpack(self, sock, ctx=None):
+        for handler in self._flist:
+            handler.unpack(sock, self)
 
-        print self.__class__, id(self), id(data)
+        return self
 
-        for name, handler in self._fields:
-            data[name] = handler.unpack(sock, self, True)
-
-        return data
-
-    def __getattr__(self, name):
-        return self[name]
-
-    def __setattr__(self, name, value):
-        self[name] = value
 
 class Qid(Struct):
     _fields = [
-        ('type', Int(1)),
-        ('version', Int(4)),
-        ('path', Int(8)),
+        ('type', Int, 1),
+        ('version', Int, 4),
+        ('path', Int, 8),
         ]
 
 class Stat(Struct):
     _fields = [
-        ('size', Int(2)),
-        ('type', Int(2)),
-        ('dev', Int(4)),
-        ('qid', Qid()),
-        ('mode', Int(4)),
-        ('atime', Int(4)),
-        ('mtime', Int(4)),
-        ('length', Int(8)),
-        ('name', String()),
-        ('uid', String()),
-        ('gid', String()),
-        ('muid', String()),
+        ('size', Int, 2),
+        ('type', Int, 2),
+        ('dev', Int, 4),
+        ('qid', Qid),
+        ('mode', Int, 4),
+        ('atime', Int, 4),
+        ('mtime', Int, 4),
+        ('length', Int, 8),
+        ('name', String),
+        ('uid', String),
+        ('gid', String),
+        ('muid', String),
         ]
 
 class Message(Struct):
     types = {}
     _fields = [
-            ('tag', Int(2)),
+            ('tag', Int, 2)
             ]
 
 
@@ -211,25 +242,23 @@ class Message(Struct):
     def __new__(cls, sock=None, *args, **kwargs):
         """ use the socket to unpack data """
         if cls == Message and (sock is not None) and isinstance(sock, socket.socket):
-            size = Int(4).unpack(sock)
+            size = Int(4)
+            size.unpack(sock)
 
-            mtype = Int(1).unpack(sock)
+            mtype = Int(1)
+            mtype.unpack(sock)
 
-            msg = super(Message, cls).__new__(cls.types[mtype])
+            msg = super(Message, cls).__new__(cls.types[mtype.data])
 
             return msg
 
         return super(Message, cls).__new__(cls)
 
-    def pack(self, data=None, ctx=None):
-        if data == None:
-            data = self
-
-        d = super(Message, self).pack(data, ctx)
-
-        sizedata = self._sizehandler.pack( 4 + 1 + len(d) )
-        #print [sizedata, self._typedata, d]
-        return ''.join([sizedata, self._typedata, d])
+    def pack(self, ctx=None):
+        data = super(Message, self).pack(ctx)
+        self._sizehandler.data = ( 4 + 1 + len(data) )
+        print [self._sizehandler.pack(self), self._typedata, data]
+        return ''.join([self._sizehandler.pack(self), self._typedata, data])
 
 def msg(num):
     """ simple decorator that counts our messages """
@@ -238,7 +267,7 @@ def msg(num):
         MAX_MSG = num+1
 
     def _msg(cls):
-        cls._typedata = Int(1).pack(num)
+        cls._typedata = Int(1, num).pack()
         Message.types[num] = cls
         return cls
 
@@ -248,44 +277,44 @@ def msg(num):
 @msg(100)
 class Tversion(Message):
     _fields = Message._fields + [
-            ('msize', Int(4)),
-            ('version', String()),
+            ('msize', Int, 4),
+            ('version', String)
             ]
 
 @msg(101)
 class Rversion(Message):
     _fields = Message._fields + [
-        ('msize', Int(4)),
-        ('version', String()),
+        ('msize', Int, 4),
+        ('version', String),
         ]
 
 @msg(102)
 class Tauth(Message):
     _fields = Message._fields + [
-        ('afid', Int(4)),
-        ('uname', String()),
-        ('aname', String()),
+        ('afid', Int, 4),
+        ('uname', String),
+        ('aname', String),
         ]
 
 @msg(103)
 class Rauth(Message):
     _fields = Message._fields + [
-        ('aqid', Qid()),
+        ('aqid', Qid),
         ]
 
 @msg(104)
 class Tattach(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('afid', Int(4)),
-        ('uname', String()),
-        ('aname', String()),
+        ('fid', Int, 4),
+        ('afid', Int, 4),
+        ('uname', String),
+        ('aname', String),
         ]
 
 @msg(105)
 class Rattach(Message):
     _fields = Message._fields + [
-        ('qid', Qid()),
+        ('qid', Qid),
         ]
 
     #@msg(106)
@@ -296,13 +325,13 @@ class Rattach(Message):
 @msg(107)
 class Rerror(Message):
     _fields = Message._fields + [
-        ('ename', String()),
+        ('ename', String),
         ]
 
 @msg(108)
 class Tflush(Message):
     _fields = Message._fields + [
-        ('oldtag', Int(2)),
+        ('oldtag', Int, 2),
         ]
 
 @msg(109)
@@ -312,83 +341,83 @@ class Rflush(Message):
 @msg(110)
 class Twalk(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('newfid', Int(4)),
-        ('nwname', Int(2)),
-        ('wname', Array(lambda ctx: ctx.nwname, String())),
+        ('fid', Int, 4),
+        ('newfid', Int, 4),
+        ('nwname', Int, 2),
+        ('wname', Array, (lambda ctx: ctx.nwname, String)),
         ]
 
 @msg(111)
 class Rwalk(Message):
     _fields = Message._fields + [
-        ('nwqid', Int(2)),
-        ('wqid', Array(lambda ctx: ctx.nwqid, Qid())),
+        ('nwqid', Int, 2),
+        ('wqid', Array, (lambda ctx: ctx.nwqid, Qid)),
         ]
 
 @msg(112)
 class Topen(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('mode', Int(1)),
+        ('fid', Int, 4),
+        ('mode', Int, 1),
         ]
 
 @msg(113)
 class Ropen(Message):
     _fields = Message._fields + [
-        ('qid', Qid()),
-        ('iounit', Int(4)),
+        ('qid', Qid),
+        ('iounit', Int, 4),
         ]
 
 @msg(114)
 class Tcreate(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('name', String()),
-        ('perm', Int(4)),
-        ('mode', Int(1)),
+        ('fid', Int, 4),
+        ('name', String),
+        ('perm', Int, 4),
+        ('mode', Int, 1),
         ]
 
 @msg(115)
 class Rcreate(Message):
     _fields = Message._fields + [
-        ('qid', Qid()),
-        ('iounit', Int(4)),
+        ('qid', Qid),
+        ('iounit', Int, 4),
         ]
 
 @msg(116)
 class Tread(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('offset', Int(8)),
-        ('count', Int(4)),
+        ('fid', Int, 4),
+        ('offset', Int, 8),
+        ('count', Int, 4),
         ]
 
 @msg(117)
 class Rread(Message):
     _fields = Message._fields + [
-        ('count', Int(4)),
-        ('data', Data(lambda ctx: ctx.count)),
+        ('count', Int, 4),
+        ('data', Data, lambda ctx: ctx.count),
         ]
 
 @msg(118)
 class Twrite(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('offset', Int(8)),
-        ('count', Int(4)),
-        ('data', Data(lambda ctx: ctx.count)),
+        ('fid', Int, 4),
+        ('offset', Int, 8),
+        ('count', Int, 4),
+        ('data', Data, lambda ctx: ctx.count),
         ]
 
 @msg(119)
 class Rwrite(Message):
     _fields = Message._fields + [
-        ('count', Int(4)),
+        ('count', Int, 4),
         ]
 
 @msg(120)
 class Tclunk(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
+        ('fid', Int, 4),
         ]
 
 @msg(121)
@@ -398,7 +427,7 @@ class Rclunk(Message):
 @msg(122)
 class Tremove(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
+        ('fid', Int, 4),
         ]
 
 @msg(123)
@@ -408,20 +437,20 @@ class Rremove(Message):
 @msg(124)
 class Tstat(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
+        ('fid', Int, 4),
         ]
 
 @msg(125)
 class Rstat(Message):
     _fields = Message._fields + [
-        ('stat', Stat()),
+        ('stat', Stat),
         ]
 
 @msg(124)
 class Twstat(Message):
     _fields = Message._fields + [
-        ('fid', Int(4)),
-        ('stat', Stat()),
+        ('fid', Int, 4),
+        ('stat', Stat),
         ]
 
 @msg(125)
@@ -574,11 +603,15 @@ class Client():
 
     def _flush(self, oldtag):
         print "_flush", oldtag
-        msg = Tflush(oldtag = oldtag)
+        msg = Tflush()
+        msg.oldtag = oldtag
         self._message(msg)
 
     def _version(self):
-        t = Tversion( msize = MSIZE, version = VERSION)
+        t = Tversion()
+
+        t.msize = MSIZE
+        t.version = VERSION
 
         r = self._message(t)
         self.msize = r.msize
@@ -586,15 +619,13 @@ class Client():
         return r.version
 
     def _attach(self, fid = None):
+        t = Tattach()
         if fid == None:
             fid = self._obtainfid()
-
-        t = Tattach(
-                fid = fid,
-                afid = NOFID,
-                uname = os.getenv('USER'),
-                aname = os.getenv('USER'),
-                )
+        t.fid = fid
+        t.afid = NOFID
+        t.uname = os.getenv('USER')
+        t.aname = os.getenv('USER')
 
         r = self._message(t)
 
@@ -614,30 +645,30 @@ class Client():
         return files
 
     def _walk(self, path):
+        t = Twalk()
+
+        t.fid = self.rootfid
+        t.newfid = self._obtainfid()
         path = filter(None, path.split('/'))
-        t = Twalk(
-                fid=self.rootfid, 
-                newfid=self._obtainfid(),
-                nwname = len(path),
-                wname = path,
-            )
+        t.nwname = len(path)
+        t.wname = path
 
         r = self._message(t)
 
         return t.newfid
 
     def _open(self, fid, mode = 0):
-        t = Topen(
-                fid = fid,
-                mode = mode,
-                )
+        t = Topen()
+        t.fid = fid
+        t.mode = mode
 
         r = self._message(t)
 
         return r.qid
 
     def _clunk(self, fid):
-        t = Tclunk(fid = fid)
+        t = Tclunk()
+        t.fid = fid
 
         self._message(t)
 
