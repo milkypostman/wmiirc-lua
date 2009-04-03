@@ -573,8 +573,61 @@ class StringSocket:
     def __repr__(self):
         return self.buffer.getvalue()
 
-class Client():
-    recvqueues = collections.defaultdict(collections.deque)
+class P9FileIter:
+    """
+    This would be much more elegant if we could do this using 
+    iterators inside an exception.
+    """
+    def __init__(self, client, path):
+        self.client = client
+        self.path = path
+
+        self.fid = client._walk(path)
+        self.qid = client._open(self.fid)
+
+        self.buffer = ''
+
+        msg = self.msg = Tread()
+        msg.fid = self.fid
+        msg.count = client.msize
+
+        self.readoffset = 0
+
+    def _reopen(self):
+        """ Eventually we'll want to reopen the fid as to lower the offset """
+        self.client._clunk(self.fid)
+        self.fid = self.client._walk(self.path)
+        self.qid = self.client._open(self.fid)
+        self.readoffset = 0
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        buffer = self.buffer
+        l = buffer.find('\n')
+        while l < 0:
+            t = self.msg
+            t.offset = self.readoffset
+
+            try:
+                r = self.client._message(t)
+            except IOError:
+                raise StopIterator
+
+            buffer += r.data
+            self.readoffset += len(r.data)
+
+            l = buffer.find('\n')
+
+        self.buffer = buffer[l+1:]
+        return buffer[:l]
+
+    def __del__(self):
+        self.client._clunk(self.fid)
+
+class Client:
+    recvqueues = {}
 
     def __init__(self, addr):
         self._tagheap = range(1, 0xff)
@@ -614,7 +667,10 @@ class Client():
         log.debug("succesfully attached")
 
     def _recv(self, tag):
-        q = self.recvqueues[tag]
+        try:
+            q = self.recvqueues[tag]
+        except KeyError:
+            q = self.recvqueues[tag] = collections.deque()
         if len(q) > 0:
             return q.pop()
 
@@ -654,14 +710,6 @@ class Client():
 
         try:
             resp = self._recv(tag)
-            #while resp is None:
-            #    try:
-            #        resp = queue.get_nowait()
-            #    except Queue.Empty:
-            #        time.sleep(.1)
-            #print 'flushing'
-            #print 'done flushing'
-            #resp = queue.get()
         except KeyboardInterrupt:
             self._flush(tag)
             self._releasetag(tag)
@@ -746,44 +794,9 @@ class Client():
 
         self._releasefid(fid)
 
+
     def readln_iter(self, path):
-        fid = self._walk(path)
-        qid = self._open(fid)
-
-        buffer = ''
-
-        t = Tread()
-        t.fid = fid
-        t.count = self.msize
-        readoffset = 0
-        try:
-            while(True):
-                t.offset = readoffset
-
-                try:
-                    r = self._message(t)
-                except IOError:
-                    break
-
-                if r.count < 1:
-                    yield buffer
-                    break
-
-                buffer += r.data
-                readoffset += len(buffer)
-
-                offset=0
-                while(True):
-                    l = buffer.find('\n', offset)
-
-                    if l < 0:
-                        buffer = buffer[offset:]
-                        break
-
-                    yield buffer[offset:l]
-                    offset = l+1
-        finally:
-            self._clunk(fid)
+        return P9FileIter(self,path)
 
     def read(self, path):
         fid = self._walk(path)
@@ -837,6 +850,47 @@ class Client():
         self._clunk(fid)
 
 
+    # I am keeping this around for the day I don't need to be
+    # Python 2.4 compatible.  C'mon REDHAT!
+    #
+    # PS: not by choice
+    #
+    #def readln_iter(self, path):
+    #    fid = self._walk(path)
+    #    qid = self._open(fid)
 
+    #    buffer = ''
 
+    #    t = Tread()
+    #    t.fid = fid
+    #    t.count = self.msize
+    #    readoffset = 0
+    #    try:
+    #        while(True):
+    #            t.offset = readoffset
+
+    #            try:
+    #                r = self._message(t)
+    #            except IOError:
+    #                break
+
+    #            if r.count < 1:
+    #                yield buffer
+    #                break
+
+    #            buffer += r.data
+    #            readoffset += len(buffer)
+
+    #            offset=0
+    #            while(True):
+    #                l = buffer.find('\n', offset)
+
+    #                if l < 0:
+    #                    buffer = buffer[offset:]
+    #                    break
+
+    #                yield buffer[offset:l]
+    #                offset = l+1
+    #    finally:
+    #        self._clunk(fid)
 
