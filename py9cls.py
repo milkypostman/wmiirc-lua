@@ -236,7 +236,6 @@ class Message(Struct):
             ('tag', Int, 2)
             ]
 
-
     _sizehandler = Int(4)
 
     def __new__(cls, sock=None, *args, **kwargs):

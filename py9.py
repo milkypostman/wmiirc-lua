@@ -16,13 +16,22 @@ MSIZE = 8192 # magic number defined in Plan9 for [TR]version and [TR]read
 MAX_MSG = 100
 NOFID = 0xFFFF
 
-class MessageData(dict):
-    def __getattr__(self, name):
-        return self[name]
+"""
+Specialized data structures for the P9 server.
+The choice to write this from scratch was a learning excersize
+and also because I wanted my classes to have structure that was
+similar to the actual messages.
 
-    def __setattr__(self, name, value):
-        self[name] = value
+One improvement might be to make each message a simple data structure
+with attributes (empty class) and then have a single Parser class that
+takes that data structure and parses it.  Essentially this is what we 
+have now but the packer is not decoupled from the structure itself.
 
+This just seems to make more sense to only have to worry about a single
+message instance that can pack and unpack itself, rather than
+an instance of a data structure that you then pass to a specific packer
+for that structure.
+"""
 
 class Data(object):
     """
@@ -84,6 +93,13 @@ class Int(Data):
         return data
 
 class String(Data):
+    """
+    P9 String Data
+    ================
+    Encodes the string length as a two byte string and appends the
+    actual string
+    """
+
     length = Int(2)
     def pack(self, data, ctx=None):
         length = self.length.pack(len(data))
@@ -93,14 +109,19 @@ class String(Data):
         length = self.length.unpack(sock)
         return sock.recv(length)
 
-class Array(Data, list):
+class Array(Data):
+    """
+    P9 Array Data
+    =================
+    Simple array wrapper for lists / tuples
+    """
     def __init__(self, size, handler=None):
         super(Array, self).__init__(size)
         self.handler = handler
 
     def pack(self, data=None, ctx=None):
         if data == None:
-            data = self
+            data = self._data
         size = self.size(ctx)
 
         if size != len(data):
@@ -112,30 +133,62 @@ class Array(Data, list):
 
         return ''.join(buffer)
 
-
     def unpack(self, sock, ctx=None, new=False):
         size = self.size(ctx)
 
         if new:
             data = []
         else:
-            data = self
+            data = self._data = []
 
         for i in range(size):
             data.append(self.handler.unpack(sock, data, True))
 
         return data
 
+def _property(name):
+    """ generates property methods for each of our fields """
+    def get(self):
+        return self._data[name]
 
-class Struct(dict):
+    def set(self, data):
+        self._data[name] = data
+
+    return property(fget=get, fset=set)
+
+
+class _MetaStruct(type):
     """
-    Structure to hold multiple base elements such as String/Integer/Data
+    Struct Meta-Class
+    ====================
+    This meta-class takes the field list and makes appropriate
+    attributes for each field.  These attributes are generated
+    by the _property method and are an alternative to overwriting
+    the __getattr__ and __setattr__ methods.
+    """
+
+    def __init__(cls, name, bases, dict):
+        super(_MetaStruct, cls).__init__(name, bases, dict)
+
+        for field in cls._fields:
+            setattr(cls, field[0], _property(field[0]))
+
+class Struct(object):
+    """
+    P9 Structure
+    ----------------
+    Structure to hold multiple base elements such as String/Integer/Data.
+    Each structure can have multiple fields which are attributes for 
+    any instance of the structure.
     """
 
     _fields = []
 
+    __metaclass__ = _MetaStruct
+
     def __init__(self, sock=None, *args, **kwargs):
         super(Struct, self).__init__()
+        self._data = {}
 
         self._fdict = {}
         for name, handler in self._fields:
@@ -145,7 +198,7 @@ class Struct(dict):
             self.unpack(sock)
         else:
             for name in kwargs:
-                self[name] = kwargs[name]
+                self._data[name] = kwargs[name]
 
     def pack(self, data=None, ctx=None):
         if data == None:
@@ -153,7 +206,8 @@ class Struct(dict):
 
         buffer = []
         for name,handler in self._fields:
-            buffer.append(self._fdict[name].pack(data[name], self))
+            p = self._fdict[name].pack(getattr(data,name), self)
+            buffer.append(p)
 
         return ''.join(buffer)
 
@@ -166,17 +220,16 @@ class Struct(dict):
         print self.__class__, id(self), id(data)
 
         for name, handler in self._fields:
-            data[name] = handler.unpack(sock, self, True)
+            setattr(data, name, handler.unpack(sock, self, True))
 
         return data
 
-    def __getattr__(self, name):
-        return self[name]
-
-    def __setattr__(self, name, value):
-        self[name] = value
-
 class Qid(Struct):
+    """
+    P9 QID Structure
+    -------
+    Structure used when walking trees and a few other small things
+    """
     _fields = [
         ('type', Int(1)),
         ('version', Int(4)),
@@ -184,6 +237,11 @@ class Qid(Struct):
         ]
 
 class Stat(Struct):
+    """
+    P9 Stat Class
+    ------------
+    Used for getting attributes of P9 files and directories.
+    """
     _fields = [
         ('size', Int(2)),
         ('type', Int(2)),
@@ -199,22 +257,56 @@ class Stat(Struct):
         ('muid', String()),
         ]
 
+class _MetaMessage(_MetaStruct):
+    """
+    Struct Meta-Class
+    ====================
+    This meta-class takes the field list and makes appropriate
+    attributes for each field.  These attributes are generated
+    by the _property method and are an alternative to overwriting
+    the __getattr__ and __setattr__ methods.
+    """
+
+    def __init__(cls, name, bases, dict):
+        # Let _MetaStruct create our attributes
+        super(_MetaMessage, cls).__init__(name, bases, dict)
+
+
+        if hasattr(cls, 'type'):
+            # record this class in the Message class
+            cls.types[cls.type] = cls
+
+            # prepack the type data
+            cls._typedata = Int(1).pack(cls.type)
+
+
 class Message(Struct):
+    """
+    P9 Base Message Class
+    ---------
+    Base class for all messages used to add size and type
+    information to the class.
+    """
+    __metaclass__ = _MetaMessage
+
     types = {}
+
     _fields = [
             ('tag', Int(2)),
             ]
 
-
     _sizehandler = Int(4)
 
     def __new__(cls, sock=None, *args, **kwargs):
-        """ use the socket to unpack data """
+        """
+        Base Class for all P9 Messages
+        ---
+        If a socket is passed into the constructure 
+        the proper class type is returned
+        """
         if cls == Message and (sock is not None) and isinstance(sock, socket.socket):
             size = Int(4).unpack(sock)
-
             mtype = Int(1).unpack(sock)
-
             msg = super(Message, cls).__new__(cls.types[mtype])
 
             return msg
@@ -222,59 +314,51 @@ class Message(Struct):
         return super(Message, cls).__new__(cls)
 
     def pack(self, data=None, ctx=None):
+        """
+        Pack a P9 Message.  Adds length information.
+        """
         if data == None:
             data = self
 
         d = super(Message, self).pack(data, ctx)
 
         sizedata = self._sizehandler.pack( 4 + 1 + len(d) )
-        #print [sizedata, self._typedata, d]
+        print [sizedata, self._typedata, d]
         return ''.join([sizedata, self._typedata, d])
 
-def msg(num):
-    """ simple decorator that counts our messages """
-    global MAX_MSG
-    if num > MAX_MSG:
-        MAX_MSG = num+1
 
-    def _msg(cls):
-        cls._typedata = Int(1).pack(num)
-        Message.types[num] = cls
-        return cls
-
-    return _msg
-
-
-@msg(100)
+# type is a field but because it needs to be read before class
+# creation, it is not treated as all the other fields.
 class Tversion(Message):
+    type = 100
     _fields = Message._fields + [
             ('msize', Int(4)),
             ('version', String()),
             ]
 
-@msg(101)
 class Rversion(Message):
+    type = 101
     _fields = Message._fields + [
         ('msize', Int(4)),
         ('version', String()),
         ]
 
-@msg(102)
 class Tauth(Message):
+    type = 102
     _fields = Message._fields + [
         ('afid', Int(4)),
         ('uname', String()),
         ('aname', String()),
         ]
 
-@msg(103)
 class Rauth(Message):
+    type = 103
     _fields = Message._fields + [
         ('aqid', Qid()),
         ]
 
-@msg(104)
 class Tattach(Message):
+    type = 104
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('afid', Int(4)),
@@ -282,35 +366,35 @@ class Tattach(Message):
         ('aname', String()),
         ]
 
-@msg(105)
 class Rattach(Message):
+    type = 105
     _fields = Message._fields + [
         ('qid', Qid()),
         ]
 
-    #@msg(106)
 #class Terror(Message):
+#type = #106
 #    def __init__(self):
 #        raise Exception("Terror is an invalid message")
 
-@msg(107)
 class Rerror(Message):
+    type = 107
     _fields = Message._fields + [
         ('ename', String()),
         ]
 
-@msg(108)
 class Tflush(Message):
+    type = 108
     _fields = Message._fields + [
         ('oldtag', Int(2)),
         ]
 
-@msg(109)
 class Rflush(Message):
+    type = 109
     pass
 
-@msg(110)
 class Twalk(Message):
+    type = 110
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('newfid', Int(4)),
@@ -318,29 +402,29 @@ class Twalk(Message):
         ('wname', Array(lambda ctx: ctx.nwname, String())),
         ]
 
-@msg(111)
 class Rwalk(Message):
+    type = 111
     _fields = Message._fields + [
         ('nwqid', Int(2)),
         ('wqid', Array(lambda ctx: ctx.nwqid, Qid())),
         ]
 
-@msg(112)
 class Topen(Message):
+    type = 112
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('mode', Int(1)),
         ]
 
-@msg(113)
 class Ropen(Message):
+    type = 113
     _fields = Message._fields + [
         ('qid', Qid()),
         ('iounit', Int(4)),
         ]
 
-@msg(114)
 class Tcreate(Message):
+    type = 114
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('name', String()),
@@ -348,30 +432,30 @@ class Tcreate(Message):
         ('mode', Int(1)),
         ]
 
-@msg(115)
 class Rcreate(Message):
+    type = 115
     _fields = Message._fields + [
         ('qid', Qid()),
         ('iounit', Int(4)),
         ]
 
-@msg(116)
 class Tread(Message):
+    type = 116
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('offset', Int(8)),
         ('count', Int(4)),
         ]
 
-@msg(117)
 class Rread(Message):
+    type = 117
     _fields = Message._fields + [
         ('count', Int(4)),
         ('data', Data(lambda ctx: ctx.count)),
         ]
 
-@msg(118)
 class Twrite(Message):
+    type = 118
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('offset', Int(8)),
@@ -379,54 +463,55 @@ class Twrite(Message):
         ('data', Data(lambda ctx: ctx.count)),
         ]
 
-@msg(119)
 class Rwrite(Message):
+    type = 119
     _fields = Message._fields + [
         ('count', Int(4)),
         ]
 
-@msg(120)
 class Tclunk(Message):
+    type = 120
     _fields = Message._fields + [
         ('fid', Int(4)),
         ]
 
-@msg(121)
 class Rclunk(Message):
+    type = 121
     pass
 
-@msg(122)
 class Tremove(Message):
+    type = 122
     _fields = Message._fields + [
         ('fid', Int(4)),
         ]
 
-@msg(123)
 class Rremove(Message):
+    type = 123
     pass
 
-@msg(124)
 class Tstat(Message):
+    type = 124
     _fields = Message._fields + [
         ('fid', Int(4)),
         ]
 
-@msg(125)
 class Rstat(Message):
+    type = 125
     _fields = Message._fields + [
         ('stat', Stat()),
         ]
 
-@msg(124)
 class Twstat(Message):
+    type = 124
     _fields = Message._fields + [
         ('fid', Int(4)),
         ('stat', Stat()),
         ]
 
-@msg(125)
 class Rwstat(Message):
+    type = 125
     pass
+
 
 class StringSocket:
     """
