@@ -343,7 +343,7 @@ class Message(Struct):
         d = super(Message, self).pack(data, ctx)
 
         sizedata = self._sizehandler.pack( 4 + 1 + len(d) )
-        print [sizedata, self._typedata, d]
+        #print [sizedata, self._typedata, d]
         return ''.join([sizedata, self._typedata, d])
 
 
@@ -704,7 +704,7 @@ class Client:
 
         msg.tag = tag
 
-        logging.debug("sending %s" % msg.__class__)
+        log.debug("sending %s" % msg.__class__)
 
         self.sock.send(msg.pack())
 
@@ -717,7 +717,7 @@ class Client:
             raise KeyboardInterrupt
 
         self._releasetag(tag)
-        logging.debug("recieving %s" % msg.__class__)
+        log.debug("recieving %s" % msg.__class__)
 
         if type(resp) == Rerror  and type(msg) != Tflush:
             raise IOError(str(type(msg)) + " : " + resp.ename)
@@ -725,7 +725,6 @@ class Client:
         return resp
 
     def _flush(self, oldtag):
-        print "_flush", oldtag
         msg = Tflush(oldtag = oldtag)
         self._message(msg)
 

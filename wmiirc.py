@@ -5,19 +5,16 @@ wmiirc-python :: foolish attempt
 import subprocess
 import time
 import sys
-
-import pyxp
+import wmii
+import logging
+class Filter:
+    def filter(self, rec): return False
 
 def main():
-    process = subprocess.Popen("wmiir read /event", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-
-    while True:
-        data = process.stdout.readline().split()
-        if data[0] == 'ClientFocus':
-            cliname = subprocess.Popen("wmiir read /client/%s/label" % data[1], stdout=subprocess.PIPE, shell=True).stdout.read()
-            print ("Client: %s" % cliname)
-
-        print data
+    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger('py9').addFilter(Filter())
+    print(logging.getLogger().filters)
+    wmii.mainloop()
 
 if __name__ == '__main__':
     main()

@@ -1,35 +1,50 @@
 import py9
 import logging
-log = logging.getLogger('WMII')
+log = logging.getLogger('wmii')
 
-class Singleton(object):
-     """ A Pythonic Singleton """
-     def __new__(cls, *args, **kwargs):
-         if '_inst' not in vars(cls):
-             cls._inst = object.__new__(cls, *args, **kwargs)
-         return cls._inst
+client = None
+#__state__ = {}
+#def __new__(cls):
+#    self = super(Wmii, cls).__new__()
+#    self.__dict__ = cls.__stat__
+#    return self
 
+def getctl(name):
+    for line in client.readln_iter('/ctl'):
+        if line.startswith(name):
+            return line.split()[1:]
 
-class Wmii(Singleton):
-    client = None
-    def __init__(self):
-        if self.client is None:
-            log.debug('creating new instance of client')
-            self.client = py9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
+def setctl(name, value):
+    client.write('/ctl',' '.join((name,value)))
 
-    def getctl(self, name):
-        for line in self.client.readln_iter('/ctl'):
-            if line.startswith(name):
-                return line.split()[1:]
+def normcolors():
+    return getctl('normcolors')
 
-    def setctl(self, name, value):
-        self.client.write('/ctl',' '.join((name,value)))
+def setFg():
+    pass
 
-    def normcolors(self):
-        return self.getctl('normcolors')
+def key_event(key):
+    log.debug('key event: %s' % key)
 
-    def setFg():
-        pass
+events = {}
+events['Key'] = [
+    key_event
+]
+def process_event(event):
+    global events
+    log.debug('processing event %s' % event.split())
+    edata = event.split()
+    event = edata[0]
+    rest = edata[1:]
 
+    for handler in events.get(event, []):
+        handler(*rest)
 
+def mainloop():
+    global client
+    if not client:
+        log.debug('creating new instance of client')
+        client = py9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
 
+    for event in client.readln_iter('/event'):
+        process_event(event)
