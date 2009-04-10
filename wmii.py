@@ -1,4 +1,6 @@
 import py9
+import subprocess
+import os
 import logging
 log = logging.getLogger('wmii')
 
@@ -22,6 +24,26 @@ def normcolors():
 
 def setFg():
     pass
+
+def menu(prompt, entries):
+    cmd = ['wimenu']
+    tmp = os.tempnam()
+    tmpfile = open(tmp, 'wb')
+
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+    for entry in entries:
+        proc.stdin.write(entry)
+        proc.stdin.write('\n')
+
+    proc.stdin.close()
+
+    out = proc.stdout.read().strip()
+
+    return out
+
+
+keybindings = {}
 
 def key_event(key):
     log.debug('key event: %s' % key)
