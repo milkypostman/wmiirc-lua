@@ -1,7 +1,6 @@
 import py9
 import subprocess
 import os
-import sys
 import logging
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger('wmii')
@@ -12,9 +11,12 @@ HISTORYSIZE=50
 log.debug('creating new instance of client')
 client = py9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
 
+tags = []
+
 def getctl(name):
     global client
-    for line in client.readln_iter('/ctl'):
+    f = client.open('/ctl')
+    for line in f:
         if line.startswith(name):
             return line.split()[1:]
 
@@ -28,26 +30,25 @@ def normcolors():
 def setFg():
     pass
 
-_proglist = None
+proglist = None
 def rehash():
     global proglist
 
     proc = subprocess.Popen("dmenu_path", stdout=subprocess.PIPE)
-    _proglist = []
+    proglist = []
     for prog in proc.stdout:
-        _proglist.append(prog.strip())
+        proglist.append(prog.strip())
 
 def program_menu():
-    global _proglist
-    if _proglist is None:
+    global proglist
+    if proglist is None:
         rehash()
 
-    prog = menu('cmd', _proglist)
+    prog = menu('cmd', proglist)
 
     if prog:
         pid = subprocess.Popen(prog).pid
         log.debug("program %s started with pid %d..." % (prog, pid))
-
 
 def menu(prompt, entries):
     histfn = os.path.join(HOME,'history.%s' % prompt)
@@ -72,14 +73,39 @@ def menu(prompt, entries):
     for h in history[-HISTORYSIZE:]:
         histfile.write(h)
         histfile.write('\n')
-
     histfile.close()
 
     return out
 
-keybindings = {}
+keybindings = {
+        'Mod1-p':lambda _: program_menu(),
+        'Mod1-j':lambda _: client.write('/tag/sel/ctl', 'select down'),
+        'Mod1-k':lambda _: client.write('/tag/sel/ctl', 'select up'),
+        'Mod1-h':lambda _: client.write('/tag/sel/ctl', 'select left'),
+        'Mod1-l':lambda _: client.write('/tag/sel/ctl', 'select right'),
+        'Mod1-comma':lambda _: view_offset(-1),
+        'Mod1-period':lambda _: view_offset(1),
+        }
+
+def updatekeys():
+    global keybindings
+    global client
+    client.write('/keys', '\n'.join(keybindings.keys()))
+
+
+def view_offset(ofs):
+    global client
+    global tags
+
+    idx = tags.index(getctl('view')[0])
+    idx = (idx+ofs) % len(tags)
+    setctl('view', tags[idx])
+
 def key_event(key):
     log.debug('key event: %s' % key)
+    func = keybindings.get(key, None)
+    if hasattr(func, '__call__'):
+        func(key)
 
 events = {
         'Key': [key_event]
@@ -90,11 +116,34 @@ def process_event(event):
     event = edata[0]
     rest = edata[1:]
 
-    for handler in _events.get(event, []):
+    for handler in events.get(event, []):
         handler(*rest)
+
+def inittags():
+    global tags
+
+    for tag in filter(lambda n: n != 'sel', client.ls('/tag')):
+        tags.append(tag)
+
 
 def mainloop():
     global client
 
-    for event in client.readln_iter('/event'):
-        process_event(event)
+    inittags()
+
+    updatekeys()
+
+    f = client.open('/event')
+
+    while True:
+        # load plugins
+        # set the timeout to the shortest plugin event
+        timeout = None
+        for event in f.readln_iter(timeout):
+            process_event(event)
+
+        # process plugin timers
+
+
+if __name__ == '__main__':
+    mainloop()

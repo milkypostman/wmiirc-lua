@@ -3,12 +3,11 @@ import sys
 import os
 import logging
 import heapq
-import thread
-import cStringIO
 import time
+import cStringIO
 import collections
-import Queue
-import copy
+import select
+
 log = logging.getLogger('py9')
 
 VERSION = '9P2000'
@@ -67,6 +66,7 @@ class Data(object):
         l = self.size(ctx)
         if l > 0:
             return sock.recv(l)
+        return ""
 
 class Int(Data):
     """
@@ -81,12 +81,12 @@ class Int(Data):
     def pack(self, data, ctx=None):
         size = self.size(ctx)
 
-        buffer = []
-        for i in range(size):
-            buffer.append(chr(data & 0xff))
+        buff = []
+        for _ in range(size):
+            buff.append(chr(data & 0xff))
             data >>= 8
 
-        return ''.join(buffer)
+        return ''.join(buff)
 
     def unpack(self, sock, ctx=None, new=False):
         size = self.size(ctx)
@@ -132,11 +132,11 @@ class Array(Data):
         if size != len(data):
             raise Exception("Error in Array")
 
-        buffer = []
+        buff = []
         for item in data:
-            buffer.append(self.handler.pack(item, buffer))
+            buff.append(self.handler.pack(item, buff))
 
-        return ''.join(buffer)
+        return ''.join(buff)
 
     def unpack(self, sock, ctx=None, new=False):
         size = self.size(ctx)
@@ -146,20 +146,20 @@ class Array(Data):
         else:
             data = self._data = []
 
-        for i in range(size):
+        for _ in range(size):
             data.append(self.handler.unpack(sock, data, True))
 
         return data
 
 def _property(name):
     """ generates property methods for each of our fields """
-    def get(self):
+    def fget(self):
         return self._data[name]
 
-    def set(self, data):
+    def fset(self, data):
         self._data[name] = data
 
-    return property(fget=get, fset=set)
+    return property(fget=fget, fset=fset)
 
 
 class _MetaStruct(type):
@@ -172,7 +172,7 @@ class _MetaStruct(type):
     the __getattr__ and __setattr__ methods.
     """
 
-    def __new__(cls, name, bases, attrs):
+    def __new__(mcs, cls, bases, attrs):
         slots = attrs.get('__slots__', [])
         fields = ()
         for base in bases:
@@ -184,13 +184,14 @@ class _MetaStruct(type):
         for field in attrs.get('fields', ()):
             name = field[0]
             if name in slots:
-                raise ClassException("%s is already defined as an attribute" % name)
+                # FIXME: Don't raise exception!
+                raise Exception("%s is already defined as an attribute" % name)
             slots.append(name)
 
         attrs['fields'] = fields
         attrs['__slots__'] = slots
 
-        return type.__new__(cls, name, bases, attrs)
+        return type.__new__(mcs, cls, bases, attrs)
 
 class Struct(object):
     """
@@ -225,12 +226,12 @@ class Struct(object):
         if data == None:
             data = self
 
-        buffer = []
+        buff = []
         for name,handler in self.fields:
             p = self._fdict[name].pack(getattr(data,name), self)
-            buffer.append(p)
+            buff.append(p)
 
-        return ''.join(buffer)
+        return ''.join(buff)
 
     def unpack(self, sock, ctx=None, new=False):
         if new:
@@ -286,17 +287,17 @@ class _MetaMessage(_MetaStruct):
     the __getattr__ and __setattr__ methods.
     """
 
-    def __init__(cls, name, bases, dict):
+    def __init__(mcs, cls, bases, dict):
         # Let _MetaStruct create our attributes
-        super(_MetaMessage, cls).__init__(name, bases, dict)
+        super(_MetaMessage, mcs).__init__(cls, bases, dict)
 
 
-        if hasattr(cls, 'type'):
+        if hasattr(mcs, 'type'):
             # record this class in the Message class
-            cls.types[cls.type] = cls
+            mcs.types[mcs.type] = mcs
 
             # prepack the type data
-            cls._typedata = cls._typehandler.pack(cls.type)
+            mcs._typedata = mcs._typehandler.pack(mcs.type)
 
 
 class Message(Struct):
@@ -325,7 +326,7 @@ class Message(Struct):
         the proper class type is returned
         """
         if cls == Message and (sock is not None) and isinstance(sock, socket.socket):
-            size = cls._sizehandler.unpack(sock)
+            cls._sizehandler.unpack(sock)
             mtype = cls._typehandler.unpack(sock)
             msg = super(Message, cls).__new__(cls.types[mtype])
 
@@ -531,7 +532,6 @@ class Twstat(Message):
 class Rwstat(Message):
     type = 125
 
-
 class StringSocket:
     """
     Wrapper around the cStringIO.StringIO class providing
@@ -544,87 +544,131 @@ class StringSocket:
     """
 
     def __init__(self):
-        self.buffer = cStringIO.StringIO()
+        self.buff = cStringIO.StringIO()
         self.length = 0
 
     def recv(self, size):
-        return self.buffer.read(size)
+        return self.buff.read(size)
 
     def send(self, data):
-        self.buffer.write(data)
-        length = self.buffer.tell()
+        self.buff.write(data)
+        length = self.buff.tell()
         if length > self.length:
             self.length = length
 
     def eof(self):
         result = False
-        if self.buffer.read(1) == '':
+        if self.buff.read(1) == '':
             result = True
         else:
-            self.buffer.seek(-1, 1)
+            self.buff.seek(-1, 1)
         return result
 
     def __getattr__(self, name):
-        length = self.buffer.tell()
+        length = self.buff.tell()
         if length > self.length:
             self.length = length
-        return getattr(self.buffer, name)
+        return getattr(self.buff, name)
 
     def __repr__(self):
-        return self.buffer.getvalue()
+        return self.buff.getvalue()
 
-class P9FileIter:
-    """
-    This would be much more elegant if we could do this using 
-    iterators inside an exception.
-    """
-    def __init__(self, client, path):
-        self.client = client
+FileMode = {
+        'r':0,
+        'w':1,
+        'rw':2,
+        'wr':2,
+        }
+
+class File:
+    def __init__(self, client, path, mode='r'):
         self.path = path
+        self.client = client
 
         self.fid = client._walk(path)
-        self.qid = client._open(self.fid)
+        self.qid = client._open(self.fid, FileMode[mode])
 
-        self.buffer = ''
-
-        msg = self.msg = Tread()
-        msg.fid = self.fid
-        msg.count = client.msize
-
-        self.readoffset = 0
-
-    def _reopen(self):
-        """ Eventually we'll want to reopen the fid as to lower the offset """
-        self.client._clunk(self.fid)
-        self.fid = self.client._walk(self.path)
-        self.qid = self.client._open(self.fid)
-        self.readoffset = 0
+        self.offset = 0
+        self.tag = None
 
     def __iter__(self):
-        return self
+        return self.readln_iter()
 
-    def next(self):
-        buffer = self.buffer
-        l = buffer.find('\n')
-        while l < 0:
-            t = self.msg
-            t.offset = self.readoffset
+    def readln_iter(self, timeout=None):
+        return self.LineIter(self, self.fid, timeout)
 
-            try:
-                r = self.client._message(t)
-            except IOError:
-                raise StopIterator
+    def write(self, data):
+        dremain = len(data)
+        doffset = 0
 
-            buffer += r.data
-            self.readoffset += len(r.data)
+        t = Twrite()
+        t.fid = self.fid
+        t.offset = self.offset
 
-            l = buffer.find('\n')
+        while dremain > 0:
+            t.count = dremain & 0xff
+            t.offset = self.offset
+            t.data = data[doffset:t.count]
 
-        self.buffer = buffer[l+1:]
-        return buffer[:l]
+            resp = self.client._message(t)
+
+            sent = resp.count
+            self.offset += sent
+            doffset += sent
+            dremain -= sent
+
+    def reset(self):
+        self.offset = 0
 
     def __del__(self):
         self.client._clunk(self.fid)
+
+    class LineIter:
+        """
+        This would be much more elegant if we could do this using 
+        iterators inside an exception.
+        """
+        def __init__(self, file, fid, timeout):
+            self.file = file
+            self.timeout = timeout
+            self.buff = ""
+
+        def __iter__(self):
+            return self
+
+        def fillbuffer(self):
+            client = self.file.client
+            msg = Tread()
+            msg.fid = self.file.fid
+            msg.count = client.msize
+            msg.offset = self.file.offset
+
+            start = time.time()
+            resp = client._message(msg, self.timeout)
+            stop = time.time()
+            if resp is not None:
+                # there was a response
+                if len(resp.data) <= 0:
+                    # EOF reached
+                    raise StopIteration
+
+                self.file.offset += len(resp.data)
+                if self.timeout is not None:
+                    self.timeout -= (stop - start)
+                self.buff += resp.data
+                return True
+
+            raise StopIteration
+
+        def next(self):
+            l = self.buff.find('\n')
+            while l < 0:
+                self.fillbuffer()
+                l = self.buff.find('\n')
+
+            out = self.buff[:l]
+            self.buff = self.buff[l+1:]
+            return out
 
 class Client:
     recvqueues = {}
@@ -651,35 +695,15 @@ class Client:
 
         self.sock = sock
 
-        #self.recvthread = thread.start_new_thread(self._recv, tuple())
-
         version = self._version()
-
         log.debug("connected to server (version %s)" % version)
-
         if version != VERSION:
             raise Exception("9P Version Mismatch")
 
         self.rootfid = 0
-
         self._attach(self.rootfid)
-
         log.debug("succesfully attached")
 
-    def _recv(self, tag):
-        try:
-            q = self.recvqueues[tag]
-        except KeyError:
-            q = self.recvqueues[tag] = collections.deque()
-        if len(q) > 0:
-            return q.pop()
-
-        while True:
-            msg = Message(self.sock)
-            t = msg.tag
-            if t == tag:
-                return msg
-            self.recvqueues[t].appendleft(msg)
 
     def _obtainfid(self):
         return heapq.heappop(self._fidheap)
@@ -698,28 +722,55 @@ class Client:
         Get a message from the socket with tag == tid.
         """
 
-
-    def _message(self, msg):
+    def _send(self, msg):
         tag = self._obtaintag()
-
         msg.tag = tag
 
-        log.debug("sending %s" % msg.__class__)
+
+        log.debug("sending %s" % msg)
 
         self.sock.send(msg.pack())
 
+        return tag
+
+    def _recv(self, tag, timeout = None):
         try:
-            resp = self._recv(tag)
+            q = self.recvqueues[tag]
+        except KeyError:
+            q = self.recvqueues[tag] = collections.deque()
+        if len(q) > 0:
+            return q.pop()
+
+        while True:
+            sock = select.select((self.sock,), (), (), timeout)[0]
+            if sock:
+                msg = Message(self.sock)
+
+                t = msg.tag
+                if t == tag:
+                    self._releasetag(t)
+                    return msg
+                self.recvqueues[t].appendleft(msg)
+            else:
+                return None
+
+    def _message(self, msg, timeout=None):
+        tag = self._send(msg)
+
+        try:
+            resp = self._recv(tag, timeout)
         except KeyboardInterrupt:
             self._flush(tag)
-            self._releasetag(tag)
             resp = self._recv(tag)
             raise KeyboardInterrupt
 
-        self._releasetag(tag)
         log.debug("recieving %s" % msg.__class__)
 
-        if type(resp) == Rerror  and type(msg) != Tflush:
+        if resp == None:
+            # timeout was met, flush the request
+            self._flush(tag)
+            self._recv(tag)
+        elif type(resp) == Rerror  and type(msg) != Tflush:
             raise IOError(str(type(msg)) + " : " + resp.ename)
 
         return resp
@@ -747,18 +798,18 @@ class Client:
                 aname = os.getenv('USER'),
                 )
 
-        r = self._message(t)
+        self._message(t)
 
         return t.fid
 
     def ls(self, path):
         """ list a directory """
-        buffer = self.read(path)
+        buff = self.read(path)
 
         # do an ls
         files = []
-        while not buffer.eof():
-            stat = Stat(buffer)
+        while not buff.eof():
+            stat = Stat(buff)
             files.append( stat.name )
 
         return files
@@ -772,7 +823,7 @@ class Client:
                 wname = path,
             )
 
-        r = self._message(t)
+        self._message(t)
 
         return t.newfid
 
@@ -793,16 +844,19 @@ class Client:
 
         self._releasefid(fid)
 
+    def open(self, path, mode='r'):
+        return File(self, path, mode)
 
-    def readln_iter(self, path):
-        return P9FileIter(self,path)
-
-    def read(self, path):
+    def read(self, path, timeout=None):
+        """
+        convenience function to read all data from a path
+        """
         fid = self._walk(path)
-        qid = self._open(fid)
+        print fid
+        self._open(fid)
 
         offset = 0
-        buffer = StringSocket()
+        buff = StringSocket()
         t = Tread()
         t.fid = fid
         t.count = self.msize
@@ -814,18 +868,21 @@ class Client:
             if r.count < 1:
                 break
 
-            buffer.write(r.data)
+            buff.write(r.data)
             offset += r.count
 
-        buffer.reset()
+        buff.reset()
 
         self._clunk(fid)
 
-        return buffer
+        return buff
 
     def write(self, path, data):
+        """
+        convenience function to write data to a path
+        """
         fid = self._walk(path)
-        qid = self._open(fid, 1)
+        self._open(fid, 1)
 
         left = len(data)
 
@@ -848,7 +905,6 @@ class Client:
 
         self._clunk(fid)
 
-
     # I am keeping this around for the day I don't need to be
     # Python 2.4 compatible.  C'mon REDHAT!
     #
@@ -858,7 +914,7 @@ class Client:
     #    fid = self._walk(path)
     #    qid = self._open(fid)
 
-    #    buffer = ''
+    #    buff = ''
 
     #    t = Tread()
     #    t.fid = fid
@@ -874,21 +930,21 @@ class Client:
     #                break
 
     #            if r.count < 1:
-    #                yield buffer
+    #                yield buff
     #                break
 
-    #            buffer += r.data
-    #            readoffset += len(buffer)
+    #            buff += r.data
+    #            readoffset += len(buff)
 
     #            offset=0
     #            while(True):
-    #                l = buffer.find('\n', offset)
+    #                l = buff.find('\n', offset)
 
     #                if l < 0:
-    #                    buffer = buffer[offset:]
+    #                    buff = buff[offset:]
     #                    break
 
-    #                yield buffer[offset:l]
+    #                yield buff[offset:l]
     #                offset = l+1
     #    finally:
     #        self._clunk(fid)
