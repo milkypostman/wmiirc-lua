@@ -1,14 +1,14 @@
 import py9
 import subprocess
 import os
-import logging
-logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger('wmii')
+#import logging
+#logging.basicConfig(level=logging.DEBUG)
+#log = logging.getLogger('wmii')
 
 HOME=os.path.join(os.getenv('HOME'), '.wmii-hg')
 HISTORYSIZE=50
 
-log.debug('creating new instance of client')
+#log.debug('creating new instance of client')
 client = py9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
 
 tags = []
@@ -48,7 +48,7 @@ def program_menu():
 
     if prog:
         pid = subprocess.Popen(prog).pid
-        log.debug("program %s started with pid %d..." % (prog, pid))
+        #log.debug("program %s started with pid %d..." % (prog, pid))
 
 def menu(prompt, entries):
     histfn = os.path.join(HOME,'history.%s' % prompt)
@@ -102,7 +102,7 @@ def view_offset(ofs):
     setctl('view', tags[idx])
 
 def key_event(key):
-    log.debug('key event: %s' % key)
+    #log.debug('key event: %s' % key)
     func = keybindings.get(key, None)
     if hasattr(func, '__call__'):
         func(key)
@@ -111,7 +111,7 @@ events = {
         'Key': [key_event]
         }
 def process_event(event):
-    log.debug('processing event %s' % event.split())
+    #log.debug('processing event %s' % event.split())
     edata = event.split()
     event = edata[0]
     rest = edata[1:]

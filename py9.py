@@ -1,14 +1,14 @@
 import socket
 import sys
 import os
-import logging
+#import logging
 import heapq
 import time
 import cStringIO
 import collections
 import select
 
-log = logging.getLogger('py9')
+#log = logging.getLogger('py9')
 
 VERSION = '9P2000'
 MSIZE = 8192 # magic number defined in Plan9 for [TR]version and [TR]read
@@ -82,7 +82,7 @@ class Int(Data):
         size = self.size(ctx)
 
         buff = []
-        for _ in range(size):
+        for _ in xrange(size):
             buff.append(chr(data & 0xff))
             data >>= 8
 
@@ -92,7 +92,7 @@ class Int(Data):
         size = self.size(ctx)
         rawdata = sock.recv(size)
         data = 0
-        for i in range(size):
+        for i in xrange(size):
             cur = ord(rawdata[i]) << (i * 8)
             data += cur
 
@@ -146,7 +146,7 @@ class Array(Data):
         else:
             data = self._data = []
 
-        for _ in range(size):
+        for _ in xrange(size):
             data.append(self.handler.unpack(sock, data, True))
 
         return data
@@ -690,19 +690,19 @@ class Client:
             else:
                 return
         except socket.error, e:
-            log.exception(e)
+            #log.exception(e)
             sys.exit(-1)
 
         self.sock = sock
 
         version = self._version()
-        log.debug("connected to server (version %s)" % version)
+        #log.debug("connected to server (version %s)" % version)
         if version != VERSION:
             raise Exception("9P Version Mismatch")
 
         self.rootfid = 0
         self._attach(self.rootfid)
-        log.debug("succesfully attached")
+        #log.debug("succesfully attached")
 
 
     def _obtainfid(self):
@@ -727,7 +727,7 @@ class Client:
         msg.tag = tag
 
 
-        log.debug("sending %s" % msg)
+        #log.debug("sending %s" % msg)
 
         self.sock.send(msg.pack())
 
@@ -764,7 +764,7 @@ class Client:
             resp = self._recv(tag)
             raise KeyboardInterrupt
 
-        log.debug("recieving %s" % msg.__class__)
+        #log.debug("recieving %s" % msg.__class__)
 
         if resp == None:
             # timeout was met, flush the request
