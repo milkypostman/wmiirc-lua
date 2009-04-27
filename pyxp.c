@@ -1,21 +1,33 @@
 #include <Python.h>
 #include "structmember.h"
+#include <string.h>
 
 #include <ixp.h>
 
 typedef struct {
     PyObject_HEAD
     PyObject *address;
-    IxpClient *cli;
+    IxpClient *client;
 } Wmii;
 
 static int Wmii_init(Wmii *self, PyObject *args, PyObject *kwds);
 static void Wmii_dealloc(Wmii *self);
 static PyObject *Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 
+static PyObject *Wmii_ls(Wmii *self, PyObject *args);
+static PyObject *Wmii_read(Wmii *self, PyObject *args);
+
 static PyMemberDef Wmii_members[] = {
     { "address", T_OBJECT_EX, offsetof(Wmii, address), 0, "client address" },
     {NULL}
+};
+
+static PyMethodDef Wmii_methods[] = {
+    {"ls", (PyCFunction)Wmii_ls, METH_VARARGS,
+        "Return the listing of a path."},
+    {"read", (PyCFunction)Wmii_read, METH_VARARGS,
+        "Return the contents of a file."},
+    {NULL},
 };
 
 static PyTypeObject WmiiType = {
@@ -47,7 +59,7 @@ static PyTypeObject WmiiType = {
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
-    0,                         /* tp_methods */
+    Wmii_methods,                         /* tp_methods */
     Wmii_members,              /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
@@ -84,16 +96,98 @@ Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     self = (Wmii *)type->tp_alloc(type, 0);
     if (self != NULL) {
-        self->cli = NULL;
+        self->client = NULL;
         self->address = NULL;
     }
     else
     {
         printf("Error creating object!\n");
     }
-    printf("self->cli: %d\n", self->cli);
+    printf("self->client: %d\n", self->client);
 
     return (PyObject *)self;
+}
+
+static PyObject *
+Wmii_read(Wmii *self, PyObject *args)
+{
+    const char *file;
+
+    char *readbuf;
+    unsigned int count = 1;
+
+    char *buf;
+    unsigned int len;
+    unsigned int size;
+
+    PyObject *outstr;
+
+    IxpCFid *fid;
+
+    PyArg_ParseTuple(args, "s", &file);
+
+    fid = ixp_open(self->client, file, P9_OREAD);
+
+    readbuf = malloc(fid->iounit);
+
+    len = 1;
+    size = fid->iounit;
+    buf = malloc(size);
+    buf[0] = '\0';
+
+    while( (count = ixp_read(fid, readbuf, fid->iounit)) > 0 )
+    {
+        while( (len+count) > size )
+        {
+            size <<= 1;
+            buf = realloc(buf, size);
+        }
+        strcpy(&buf[len-1], readbuf);
+        len += count;
+    }
+
+    ixp_close(fid);
+    outstr = PyString_FromString(buf);
+
+    free(buf);
+    free(readbuf);
+
+    return outstr;
+
+}
+
+static PyObject *
+Wmii_ls(Wmii *self, PyObject *args)
+{
+    const char *file;
+    char *buf;
+    PyArg_ParseTuple(args, "s", &file);
+    int count;
+    PyObject *list;
+    
+    IxpCFid *fid;
+    IxpStat stat;
+    IxpMsg msg;
+    
+    fid = ixp_open(self->client, file, P9_OREAD);
+    buf = malloc(fid->iounit);
+
+    list = PyList_New(0);
+
+    while( (count = ixp_read(fid, buf, fid->iounit)) > 0 )
+    {
+
+        msg = ixp_message(buf, count, MsgUnpack);
+        while(msg.pos < msg.end)
+        {
+            ixp_pstat(&msg, &stat);
+            PyList_Append(list, PyString_FromString(stat.name));
+        }
+    }
+
+    ixp_close(fid);
+    free(buf);
+    return list;
 }
 
 static int
@@ -112,13 +206,13 @@ Wmii_init(Wmii *self, PyObject *args, PyObject *kwds)
 
         adr = PyString_AsString(address);
 
-        if (self->cli) {
-            ixp_unmount(self->cli);
+        if (self->client) {
+            ixp_unmount(self->client);
         }
 
         printf("** Wmii([%s]) **\n", adr);
-        self->cli = ixp_mount(adr);
-        printf("self->cli: %d\n", self->cli);
+        self->client = ixp_mount(adr);
+        printf("self->client: %d\n", self->client);
 
         Py_XDECREF(tmp);
     }
@@ -129,9 +223,9 @@ Wmii_init(Wmii *self, PyObject *args, PyObject *kwds)
 static void
 Wmii_dealloc(Wmii *self)
 {
-    if (self->cli)
+    if (self->client)
     {
-        ixp_unmount(self->cli);
+        ixp_unmount(self->client);
     }
     Py_XDECREF(self->address);
     self->ob_type->tp_free((PyObject*)self);
