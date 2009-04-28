@@ -1,4 +1,4 @@
-import py9
+import pyxp
 import subprocess
 import os
 #import logging
@@ -9,14 +9,13 @@ HOME=os.path.join(os.getenv('HOME'), '.wmii-hg')
 HISTORYSIZE=50
 
 #log.debug('creating new instance of client')
-client = py9.Client('unix!/tmp/ns.dcurtis.:0/wmii')
+client = pyxp.Wmii('unix!/tmp/ns.dcurtis.:0/wmii')
 
 tags = []
 
 def getctl(name):
     global client
-    f = client.open('/ctl')
-    for line in f:
+    for line in client.read('/ctl'):
         if line.startswith(name):
             return line.split()[1:]
 
@@ -133,14 +132,11 @@ def mainloop():
 
     updatekeys()
 
-    f = client.open('/event')
-
     while True:
         # load plugins
         # set the timeout to the shortest plugin event
         timeout = None
-        for event in f.readln_iter(timeout):
-            process_event(event)
+        break
 
         # process plugin timers
 

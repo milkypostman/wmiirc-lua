@@ -106,7 +106,7 @@ Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     {
         printf("Error creating object!\n");
     }
-    printf("self->client: %d\n", self->client);
+    //printf("self->client: %d\n", self->client);
 
     return (PyObject *)self;
 }
@@ -219,24 +219,47 @@ Wmii_init(Wmii *self, PyObject *args, PyObject *kwds)
 {
     PyObject *address, *tmp;
     const char *adr;
+    char *user;
+    char *display;
+    char *adrbuild;
+    int adrlen=0;
 
     if (!PyArg_ParseTuple(args, "S", &address))
-        return -1;
+    {
+        // try and build the address
+        user = getenv("USER");
+        display = strndup(getenv("DISPLAY"), 2);
+
+        adrlen = strlen(user) + strlen(display) + 20;
+
+        adrbuild = (char *) malloc(adrlen);
+        sprintf(adrbuild, "unix!/tmp/ns.%s.%s/wmii", user, display);
+        //printf("ADDRESS BUILDER: %s, %d, %d\n", adrbuild, strlen(adrbuild), adrlen);
+        address = PyString_FromString(adrbuild);
+        free(display);
+        free(adrbuild);
+    }
+
 
     if(address) {
+        if (self->client) {
+            ixp_unmount(self->client);
+        }
+
         tmp = self->address;
         Py_INCREF(address);
         self->address = address;
 
         adr = PyString_AsString(address);
 
-        if (self->client) {
-            ixp_unmount(self->client);
-        }
 
-        printf("** Wmii([%s]) **\n", adr);
+        //printf("** Wmii([%s]) **\n", adr);
         self->client = ixp_mount(adr);
-        printf("self->client: %d\n", self->client);
+        //printf("self->client: %d\n", self->client);
+        if(!self->client) {
+            PyErr_SetString(PyExc_RuntimeError, "Could not connect to server");
+            return -1;
+        }
 
         Py_XDECREF(tmp);
     }
