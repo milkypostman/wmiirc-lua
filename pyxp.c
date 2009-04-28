@@ -219,27 +219,9 @@ Wmii_init(Wmii *self, PyObject *args, PyObject *kwds)
 {
     PyObject *address, *tmp;
     const char *adr;
-    char *user;
-    char *display;
-    char *adrbuild;
-    int adrlen=0;
 
     if (!PyArg_ParseTuple(args, "S", &address))
-    {
-        // try and build the address
-        user = getenv("USER");
-        display = strndup(getenv("DISPLAY"), 2);
-
-        adrlen = strlen(user) + strlen(display) + 20;
-
-        adrbuild = (char *) malloc(adrlen);
-        sprintf(adrbuild, "unix!/tmp/ns.%s.%s/wmii", user, display);
-        //printf("ADDRESS BUILDER: %s, %d, %d\n", adrbuild, strlen(adrbuild), adrlen);
-        address = PyString_FromString(adrbuild);
-        free(display);
-        free(adrbuild);
-    }
-
+        return -1;
 
     if(address) {
         if (self->client) {
