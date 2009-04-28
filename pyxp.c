@@ -15,6 +15,7 @@ static void Wmii_dealloc(Wmii *self);
 static PyObject *Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 
 static PyObject *Wmii_ls(Wmii *self, PyObject *args);
+static PyObject *Wmii_write(Wmii *self, PyObject *args);
 static PyObject *Wmii_read(Wmii *self, PyObject *args);
 
 static PyMemberDef Wmii_members[] = {
@@ -27,6 +28,8 @@ static PyMethodDef Wmii_methods[] = {
         "Return the listing of a path."},
     {"read", (PyCFunction)Wmii_read, METH_VARARGS,
         "Return the contents of a file."},
+    {"write", (PyCFunction)Wmii_write, METH_VARARGS,
+        "Write to a file file."},
     {NULL},
 };
 
@@ -106,6 +109,27 @@ Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     printf("self->client: %d\n", self->client);
 
     return (PyObject *)self;
+}
+
+static PyObject *
+Wmii_write(Wmii *self, PyObject *args)
+{
+    const char *file;
+    const char *data;
+
+    IxpCFid *fid;
+
+    if (!PyArg_ParseTuple(args, "ss", &file,  &data)) {
+        PyErr_SetString(PyExc_TypeError, "Wmii.write() takes exactly 2 arguments");
+        return NULL;
+    }
+
+    fid = ixp_open(self->client, file, P9_OWRITE);
+    ixp_write(fid, data, strlen(data));
+
+    ixp_close(fid);
+
+    Py_RETURN_NONE;
 }
 
 static PyObject *
