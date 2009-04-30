@@ -1,21 +1,31 @@
 import pyxp
 import subprocess
+import time
+import re
+import select
 import os
-#import logging
-#logging.basicConfig(level=logging.DEBUG)
-#log = logging.getLogger('wmii')
+import logging
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger('wmii')
 
 HOME=os.path.join(os.getenv('HOME'), '.wmii-hg')
-HISTORYSIZE=50
+HISTORYSIZE=5
 
 #log.debug('creating new instance of client')
 client = pyxp.Wmii('unix!/tmp/ns.dcurtis.:0/wmii')
 
-tags = []
+tags = { 'main' : 1,
+        'www' : 2,
+        }
+
+_tagidx = {}
+_tagname = {}
+
+_tagidxname = ()
 
 def getctl(name):
     global client
-    for line in client.read('/ctl'):
+    for line in client.read('/ctl').split('\n'):
         if line.startswith(name):
             return line.split()[1:]
 
@@ -62,17 +72,18 @@ def menu(prompt, entries):
 
     out = proc.stdout.read().strip()
 
-    history = []
-    histfile = open(histfn,'r+')
-    for h in histfile:
-        history.append(h.strip())
-    history.append(out)
+    if out:
+        history = []
+        histfile = open(histfn,'a+')
+        for h in histfile:
+            history.append(h.strip())
+        history.append(out)
 
-    histfile.seek(0)
-    for h in history[-HISTORYSIZE:]:
-        histfile.write(h)
-        histfile.write('\n')
-    histfile.close()
+        histfile = open(histfn,'w+')
+        for h in history[-HISTORYSIZE:]:
+            histfile.write(h)
+            histfile.write('\n')
+        histfile.close()
 
     return out
 
@@ -82,35 +93,70 @@ keybindings = {
         'Mod1-k':lambda _: client.write('/tag/sel/ctl', 'select up'),
         'Mod1-h':lambda _: client.write('/tag/sel/ctl', 'select left'),
         'Mod1-l':lambda _: client.write('/tag/sel/ctl', 'select right'),
+        'Mod1-l':lambda _: client.write('/tag/sel/ctl', 'select right'),
         'Mod1-comma':lambda _: view_offset(-1),
         'Mod1-period':lambda _: view_offset(1),
+        'Mod4-#':lambda key: set_tag_idx(int(key[key.find('-')+1:])),
         }
 
 def updatekeys():
     global keybindings
     global client
-    client.write('/keys', '\n'.join(keybindings.keys()))
+    numre = re.compile('(.*-)#')
+
+    keys = []
+    for key in keybindings:
+        match = numre.match(key)
+        if match:
+            pfx = match.group(1)
+            keys.extend([pfx+str(i) for i in range(10)])
+
+        keys.append(key)
+
+    client.write('/keys', '\n'.join(keys))
 
 
 def view_offset(ofs):
     global client
-    global tags
+    global _tagidx
 
-    idx = tags.index(getctl('view')[0])
-    idx = (idx+ofs) % len(tags)
-    setctl('view', tags[idx])
+    view = getctl('view')[0]
+    idx = _tagidxname.index( (_tagidx[view], view) )
+
+    idx,view = _tagidxname[(idx + ofs) % len(_tagidxname)]
+
+    setctl('view', view)
+
 
 def key_event(key):
     #log.debug('key event: %s' % key)
     func = keybindings.get(key, None)
     if hasattr(func, '__call__'):
         func(key)
+    else:
+        numkey = re.sub('-\d*', '-#', key)
+        func = keybindings.get(numkey, None)
+        if hasattr(func, '__call__'):
+            func(key)
+
+def set_tag_idx(idx):
+    if idx in _tagname:
+        setctl('view', _tagname[idx])
+
+def focus_tag(tag):
+    print tag
+
+def unfocus_tag(tag):
+    print tag
 
 events = {
-        'Key': [key_event]
+        'Key': [key_event],
+        'FocusTag': [focus_tag],
+        'UnfocusTag': [unfocus_tag],
         }
+
 def process_event(event):
-    #log.debug('processing event %s' % event.split())
+    log.debug('processing event %s' % event.split())
     edata = event.split()
     event = edata[0]
     rest = edata[1:]
@@ -119,10 +165,27 @@ def process_event(event):
         handler(*rest)
 
 def inittags():
-    global tags
+    global _tagidx, _tagname, _tagidxname
+    global client
 
+    for tag, idx in tags.iteritems():
+        _tagidx[tag] = idx
+        _tagname[idx] = tag
+
+    idx = 0
     for tag in filter(lambda n: n != 'sel', client.ls('/tag')):
-        tags.append(tag)
+        if tag in _tagidx:
+            continue
+
+        while idx in _tagname:
+            idx += 1
+
+        _tagidx[tag] = idx
+        _tagname[idx] = tag
+
+        idx += 1
+
+    _tagidxname = sorted(_tagname.iteritems())
 
 
 def mainloop():
@@ -132,13 +195,27 @@ def mainloop():
 
     updatekeys()
 
+    eventproc = subprocess.Popen(("wmiir","read","/event"), stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
+
     while True:
+
         # load plugins
         # set the timeout to the shortest plugin event
-        timeout = None
-        break
+        #timeout = 0
+        #print type(proc.stdout)
 
-        # process plugin timers
+        timeout = 5
+        while True:
+            s = time.time()
+            rdy, _, _ = select.select([eventproc.stdout], [], [], timeout)
+            if not rdy:
+                break
+            e = time.time()
+
+            line = rdy[0].readline()
+            process_event(line)
+
+            timeout -= e-s
 
 
 if __name__ == '__main__':

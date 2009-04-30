@@ -6,7 +6,7 @@
 
 typedef struct {
     PyObject_HEAD
-    PyObject *address;
+        PyObject *address;
     IxpClient *client;
 } Wmii;
 
@@ -14,6 +14,7 @@ static int Wmii_init(Wmii *self, PyObject *args, PyObject *kwds);
 static void Wmii_dealloc(Wmii *self);
 static PyObject *Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 
+static PyObject *Wmii_create(Wmii *self, PyObject *args);
 static PyObject *Wmii_ls(Wmii *self, PyObject *args);
 static PyObject *Wmii_write(Wmii *self, PyObject *args);
 static PyObject *Wmii_read(Wmii *self, PyObject *args);
@@ -29,53 +30,55 @@ static PyMethodDef Wmii_methods[] = {
     {"read", (PyCFunction)Wmii_read, METH_VARARGS,
         "Return the contents of a file."},
     {"write", (PyCFunction)Wmii_write, METH_VARARGS,
-        "Write to a file file."},
+        "Write to a file."},
+    {"create", (PyCFunction)Wmii_create, METH_VARARGS,
+        "Create a file."},
     {NULL},
 };
 
-static PyTypeObject WmiiType = {
-    PyObject_HEAD_INIT(NULL)
-    0,                         /*ob_size*/
-    "pyxp.Wmii",               /*tp_name*/
-    sizeof(Wmii),         /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor)Wmii_dealloc,  /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    "WMII objects",            /* tp_doc */
-    0,                         /* tp_traverse */
-    0,                         /* tp_clear */
-    0,                         /* tp_richcompare */
-    0,                         /* tp_weaklistoffset */
-    0,                         /* tp_iter */
-    0,                         /* tp_iternext */
-    Wmii_methods,                         /* tp_methods */
-    Wmii_members,              /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)Wmii_init,       /* tp_init */
-    0,                         /* tp_alloc */
-    Wmii_new,                  /* tp_new */
-};
+    static PyTypeObject WmiiType = {
+        PyObject_HEAD_INIT(NULL)
+            0,                         /*ob_size*/
+        "pyxp.Wmii",               /*tp_name*/
+        sizeof(Wmii),         /*tp_basicsize*/
+        0,                         /*tp_itemsize*/
+        (destructor)Wmii_dealloc,  /*tp_dealloc*/
+        0,                         /*tp_print*/
+        0,                         /*tp_getattr*/
+        0,                         /*tp_setattr*/
+        0,                         /*tp_compare*/
+        0,                         /*tp_repr*/
+        0,                         /*tp_as_number*/
+        0,                         /*tp_as_sequence*/
+        0,                         /*tp_as_mapping*/
+        0,                         /*tp_hash */
+        0,                         /*tp_call*/
+        0,                         /*tp_str*/
+        0,                         /*tp_getattro*/
+        0,                         /*tp_setattro*/
+        0,                         /*tp_as_buffer*/
+        Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+        "WMII objects",            /* tp_doc */
+        0,                         /* tp_traverse */
+        0,                         /* tp_clear */
+        0,                         /* tp_richcompare */
+        0,                         /* tp_weaklistoffset */
+        0,                         /* tp_iter */
+        0,                         /* tp_iternext */
+        Wmii_methods,                         /* tp_methods */
+        Wmii_members,              /* tp_members */
+        0,                         /* tp_getset */
+        0,                         /* tp_base */
+        0,                         /* tp_dict */
+        0,                         /* tp_descr_get */
+        0,                         /* tp_descr_set */
+        0,                         /* tp_dictoffset */
+        (initproc)Wmii_init,       /* tp_init */
+        0,                         /* tp_alloc */
+        Wmii_new,                  /* tp_new */
+    };
 
-PyMODINIT_FUNC
+    PyMODINIT_FUNC
 initpyxp(void)
 {
     PyObject *m;
@@ -92,7 +95,7 @@ initpyxp(void)
     PyModule_AddObject(m, "Wmii", (PyObject *)&WmiiType);
 }
 
-static PyObject *
+    static PyObject *
 Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     Wmii *self;
@@ -109,6 +112,31 @@ Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     //printf("self->client: %d\n", self->client);
 
     return (PyObject *)self;
+}
+
+static PyObject *
+Wmii_create(Wmii *self, PyObject *args)
+{
+    IxpCFid *fid;
+    const char *file;
+
+    if (!PyArg_ParseTuple(args, "s", &file)) {
+        PyErr_SetString(PyExc_TypeError, "Wmii.create() takes exactly 1 argument");
+        return NULL;
+    }
+
+    fid = ixp_create(self->client, file, 0777, P9_OWRITE);
+    if(fid == NULL)
+    {
+        PyErr_SetObject(PyExc_IOError, PyString_FromFormat("Can't create file '%s'\n", file));
+    }
+
+    if((fid->qid.type&P9_DMDIR) == 0)
+    {
+        ixp_write(fid, file, strlen(file));
+    }
+    ixp_close(fid);
+    Py_RETURN_NONE;
 }
 
 static PyObject *
@@ -188,11 +216,11 @@ Wmii_ls(Wmii *self, PyObject *args)
     PyArg_ParseTuple(args, "s", &file);
     int count;
     PyObject *list;
-    
+
     IxpCFid *fid;
     IxpStat stat;
     IxpMsg msg;
-    
+
     fid = ixp_open(self->client, file, P9_OREAD);
     buf = malloc(fid->iounit);
 
