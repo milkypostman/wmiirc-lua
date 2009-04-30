@@ -15,6 +15,7 @@ static void Wmii_dealloc(Wmii *self);
 static PyObject *Wmii_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 
 static PyObject *Wmii_create(Wmii *self, PyObject *args);
+static PyObject *Wmii_remove(Wmii *self, PyObject *args);
 static PyObject *Wmii_ls(Wmii *self, PyObject *args);
 static PyObject *Wmii_write(Wmii *self, PyObject *args);
 static PyObject *Wmii_read(Wmii *self, PyObject *args);
@@ -33,6 +34,8 @@ static PyMethodDef Wmii_methods[] = {
         "Write to a file."},
     {"create", (PyCFunction)Wmii_create, METH_VARARGS,
         "Create a file."},
+    {"remove", (PyCFunction)Wmii_remove, METH_VARARGS,
+        "Remove a file."},
     {NULL},
 };
 
@@ -119,9 +122,10 @@ Wmii_create(Wmii *self, PyObject *args)
 {
     IxpCFid *fid;
     const char *file;
+    const char *data;
 
-    if (!PyArg_ParseTuple(args, "s", &file)) {
-        PyErr_SetString(PyExc_TypeError, "Wmii.create() takes exactly 1 argument");
+    if (!PyArg_ParseTuple(args, "s|s", &file, &data)) {
+        PyErr_SetString(PyExc_TypeError, "Wmii.create() requires 1 argument");
         return NULL;
     }
 
@@ -133,9 +137,29 @@ Wmii_create(Wmii *self, PyObject *args)
 
     if((fid->qid.type&P9_DMDIR) == 0)
     {
-        ixp_write(fid, file, strlen(file));
+        if(strlen(data)) {
+            ixp_write(fid, data, strlen(data));
+        }
     }
     ixp_close(fid);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+Wmii_remove(Wmii *self, PyObject *args)
+{
+    const char *file;
+
+    if (!PyArg_ParseTuple(args, "s", &file)) {
+        PyErr_SetString(PyExc_TypeError, "Wmii.remove() takes exactly 1 argument");
+        return NULL;
+    }
+
+    if (!ixp_remove(self->client, file))
+    {
+        PyErr_SetObject(PyExc_IOError, PyString_FromFormat("Can't remove file '%s'\n", file));
+        return NULL;
+    }
     Py_RETURN_NONE;
 }
 
@@ -153,6 +177,12 @@ Wmii_write(Wmii *self, PyObject *args)
     }
 
     fid = ixp_open(self->client, file, P9_OWRITE);
+    if(fid == NULL)
+    {
+        PyErr_SetObject(PyExc_IOError, PyString_FromFormat("Can't open file '%s'\n", file));
+        return NULL;
+    }
+
     ixp_write(fid, data, strlen(data));
 
     ixp_close(fid);
